@@ -1,0 +1,46 @@
+[
+    {
+        "fileName": "rando_file",
+        "fileExt": "txt",
+        "fileSize": 1024,
+        "lastModified": 1672495101,
+        "filePath": "/Users/thomasgascoyne/SelfHostedCloudDrive",
+        "lastViewed": 1672495101,
+        "isFavourite": false,
+        "isDir": false,
+        "uploadDate": 1672495101
+    },
+    {
+        "fileName": "rando_dir",
+        "fileExt": "",
+        "fileSize": 3072,
+        "lastModified": 1672495101,
+        "filePath": "/Users/thomasgascoyne/SelfHostedCloudDrive",
+        "lastViewed": 1672495101,
+        "isFavourite": false,
+        "isDir": true,
+        "uploadDate": 1672495101
+    },
+    {
+        "fileName": "rando_file_in_dir",
+        "fileExt": "",
+        "fileSize": 1024,
+        "lastModified": 1672495101,
+        "filePath": "/Users/thomasgascoyne/SelfHostedCloudDrive/rando_dir",
+        "lastViewed": 1672495101,
+        "isFavourite": false,
+        "isDir": false,
+        "uploadDate": 1672495101
+    },
+    {
+        "fileName": "rando_file_in_dir2",
+        "fileExt": "",
+        "fileSize": 2048,
+        "lastModified": 1672495101,
+        "filePath": "/Users/thomasgascoyne/SelfHostedCloudDrive/rando_dir",
+        "lastViewed": 1672495101,
+        "isFavourite": false,
+        "isDir": false,
+        "uploadDate": 1672495101
+    }
+]

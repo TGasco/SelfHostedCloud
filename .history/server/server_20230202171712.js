@@ -1,0 +1,109 @@
+var http = require('http');
+var express = require('express');
+const fs = require('fs');
+
+// Initialise middleware
+let app = express();
+let router = require('./router.js');
+var multer = require('multer');
+const path = require('path');
+app.use(express.static('public'));
+app.use(router)
+
+
+// Define Constants
+let PORT = 8081; // Port to listen on
+
+// function get_req(route) {
+//   return app.get('/' + route, function(req, res) {
+//     res.send('Testing Cloud App Alpha 0.0.1');
+//   })
+// }
+
+
+var server = app.listen(PORT, function() {
+  var host = server.address().address
+  host = (host == '::')? 'localhost':host;
+  var port = server.address().port
+  console.log(host)
+  console.log(port)
+  console.log("Server listening at http://%s:%s", host, port)
+})
+
+var filePath = "/Users/thomasgascoyne/SelfHostedCloudDrive/HelloWorld.txt"
+
+function getFileMetadata(filePath, callback) {
+  if (!pathExists(filePath)) {
+    console.log("Path does not exist at " + filePath + "!");
+    return null;
+  }
+  var fileName;
+  var fileExt;
+  var fileSize;
+  var lastModified;
+  var dirPath;
+  var lastViewed;
+  var isFavourited = false;
+  var isDirectory;
+  var uploadDate;
+
+  fileName = path.basename(filePath);
+  dirPath = path.dirname(filePath);
+  fileExt = path.extname(filePath);
+  isDirectory = isDir(filePath);
+
+  fs.stat(filePath, function(err, stats){
+    //Checking for errors
+    if(err){
+        console.log(err)
+    }
+    else {
+      //Logging the stats Object
+      fileSize = stats.size;
+      lastModified = stats.mtime;
+      lastViewed = stats.atime;
+      uploadDate = stats.birthtime;
+
+      metadata = {
+        "fileName": fileName,
+        "fileExt": fileExt,
+        "fileSize": fileSize,
+        "lastModified": lastModified,
+        "dirPath": dirPath,
+        "lastViewed": lastViewed,
+        "isFavourited": isFavourited,
+        "isDirectory": isDirectory,
+        "uploadDate": uploadDate
+      }
+      console.log(metadata)
+    }
+  });
+
+}
+
+function pathExists(filePath) {
+  fs.access(filePath, fs.F_OK, function(err) {
+    if (err) {
+      console.error(err)
+      return false
+    } else {
+      console.log('Valid path')
+      return true
+    }
+  })
+}
+
+function isDir(path) {
+  try {
+      var stat = fs.lstatSync(path);
+      return stat.isDirectory();
+  } catch (e) {
+      // lstatSync throws an error if path doesn't exist
+      console.log("Path does not exist!")
+      return false;
+  }
+}
+
+getFileMetadata(filePath);
+
+// get_req('login.html')

@@ -20,7 +20,7 @@ function init_grid(path) {
         const fIndex = i * 4 + j; // Associated file index
         const colDiv = document.createElement("div");
         colDiv.id = "col-" + i + "-" + j;
-        colDiv.className = "col";
+        colDiv.className = "col " + files[fIndex]._id;
         if (files[fIndex].isDirectory) {
           colDiv.addEventListener("click", () => {
             event.preventDefault();

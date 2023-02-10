@@ -105,9 +105,18 @@ async function CountDocuments() {
   }
 }
 
-async function GetDocumentsWithRoot(root) {
-  var query = { "dirPath" : root };
+async function GetDocumentsWithRoot(root, deep=false) {
+  if (deep) {
+    var query = new RegExp("^" + root + "(\\/.*)*$");
+    return QueryCollection({"dirPath" : { $regex: query } });
+  } else {
+    var query = { "dirPath" : root };
+  }
   return QueryCollection(query);
+}
+
+async function GetDocumentById(id) {
+  return QueryCollection({"_id" : id});
 }
 
 async function walkDir(dir) {
@@ -122,7 +131,7 @@ async function walkDir(dir) {
   });
 
   const promises = files.filter((file) => {
-    return !file.startsWith('.'); // Ingores hidden files
+    return !file.startsWith('.'); // Ignores hidden files
   }).map(async (file) => {
     const filePath = path.join(dir, file);
     const stat = await new Promise((resolve, reject) => {
@@ -243,15 +252,34 @@ function InsertFilesystem(dir) {
   });
 }
 
-async function UpdateRecords(dir) {
+async function RenameFile(oldName, newName, dir) {
+  // Rename the file on the host filesystem
+  const oldPath = path.join(dir, oldName);
+  const newPath = path.join(dir, newName);
+
+  // Rename the file on the host filesystem: Comment out for testing
+  // fs.rename(oldPath, newPath, (err) => {
+  //   if (err) {
+  //     console.log(err);
+  //   } else {
+  //     console.log("Successfully renamed the file!");
+  //   }
+  // });
+
+  // Update the records in the database
   const client = new MongoClient(uri, { useNewUrlParser: true });
   try {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection(collectionName);
-    collection.updateMany({ name: 'John' }, { $set: { name: 'Jane' } }, function(err, res) {
-      console.log("Document updated");
-      client.close();
+    GetDocumentsWithRoot(oldPath, true).then(documents => {
+      for (let i = 0; i < documents.length; i++) {
+        const id = documents[i]._id;
+        const oldPath = path.join(documents[i].dirPath, documents[i].fileName);
+        const newPath = oldPath.replace(oldName, newName);
+        // collection.updateOne({ "_id" : id }, { $set: { "dirPath" : newPath}});
+        console.log("Updating " + oldPath + " to " + newPath);
+      }
     });
   } catch (error) {
     console.error(error);
@@ -260,4 +288,4 @@ async function UpdateRecords(dir) {
   }
 }
 
-export {InsertDocument, GetAllDocuments, GetDocumentsWithRoot, walkDir, InsertFilesystem, QueryCollection, CountDocuments};
+export {InsertDocument, GetAllDocuments, GetDocumentsWithRoot, walkDir, InsertFilesystem, QueryCollection, CountDocuments, RenameFile};

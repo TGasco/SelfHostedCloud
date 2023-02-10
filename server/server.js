@@ -5,7 +5,7 @@ import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import router from './router.js';
-import { InsertFilesystem } from '../database/filesdb.js';
+import { GetDocumentsWithRoot, InsertFilesystem, QueryCollection, RenameFile } from '../database/filesdb.js';
 import multer from 'multer';
 import { basename, extname, dirname, join } from 'path';
 
@@ -33,4 +33,5 @@ var server = app.listen(PORT, function() {
   console.log("Server listening at http://%s:%s", host, port)
 });
 
-InsertFilesystem(baseDir);
+// InsertFilesystem(baseDir);
+RenameFile("RandoFolder2", "ItWorks", baseDir)

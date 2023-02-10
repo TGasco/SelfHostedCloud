@@ -5,7 +5,8 @@ import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import router from './router.js';
-import { GetDocumentsWithRoot, InsertFilesystem, QueryCollection, RenameFile } from '../database/filesdb.js';
+import { GetDocumentsWithRoot, InsertFilesystem, RenameFile } from '../database/filesdb.js';
+import { GetAllDocuments } from '../database/dbops.js';
 import multer from 'multer';
 import { basename, extname, dirname, join } from 'path';
 
@@ -34,4 +35,5 @@ var server = app.listen(PORT, function() {
 });
 
 // InsertFilesystem(baseDir);
-RenameFile("RandoFolder2", "ItWorks", baseDir)
+// RenameFile("RandoFolder2", "ItWorks", baseDir)
+GetAllDocuments("myDrive").then(data => console.log(data));

@@ -5,16 +5,11 @@ import path from 'path';
 import fs from 'fs';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname, join } from 'path';
-const uri = "mongodb://127.0.0.1:27017"
-// const client = new MongoClient(uri, { useNewUrlParser: true });
-// client.connect(err => {
-//   const collection = client.db("cloud_server").collection("files");
-//   // perform actions on the collection object
-//   client.close();
-// });
 
-const dbName = "self-hosted-cloud"
-const collectionName = "myDrive"
+// Define the MongoDB connection URI
+const uri = "mongodb://127.0.0.1:27017"
+const dbName = "self-hosted-cloud";
+const collectionName = "myDrive";
 
 // Define the file metadata schema
 const fileSchema = {
@@ -30,80 +25,36 @@ const fileSchema = {
 };
 
 // Create a model for the file metadata
-const File = mongoose.model("myDrive", fileSchema);
+const File = mongoose.model("myDrive", fileSchema, collectionName);
 
-function MongoConnect(dbName, collectionName) {
-    const client = new MongoClient(uri, { useNewUrlParser: true });
-    client.connect(err => {
-    const collection = client.db(dbName).collection(collectionName);
-    console.log("Connected successfully to database!");
-    // perform actions on the collection object
-    client.close();
-    });
-}
+// async function InsertDocument(document) {
+//     const client = new MongoClient(uri, { useNewUrlParser: true });
+//     try {
+//         await client.connect();
+//         const db = client.db(dbName);
+//         const collection = db.collection(collectionName);
 
-async function InsertDocument(document) {
-    const client = new MongoClient(uri, { useNewUrlParser: true });
-    try {
-        await client.connect();
-        const db = client.db(dbName);
-        const collection = db.collection(collectionName);
+//         // Check if document already exists in database, skip if it does
+//         const exists = await QueryCollection({"dirPath" : document.dirPath, "fileName" : document.fileName, "fileExt" : document.fileExt}).then(data => {
+//           if (data.length > 0) {
+//             return true;
+//           } else {
+//             return false;
+//           }
+//         });
 
-        // Check if document already exists in database, skip if it does
-        const exists = await QueryCollection({"dirPath" : document.dirPath, "fileName" : document.fileName, "fileExt" : document.fileExt}).then(data => {
-          if (data.length > 0) {
-            return true;
-          } else {
-            return false;
-          }
-        });
-
-        if (exists) {
-          console.log("Document " + document.fileName + document.fileExt + " already exists in database!");
-        } else {
-          const result = await collection.insertOne(document); // Inserts the document, comment out for debugging
-          console.log('Inserted document ' + document.fileName + document.fileExt + ' into the collection');
-        }
-    } catch (err) {
-        console.log(err.stack);
-    } finally {
-        client.close();
-    }
-}
-
-async function GetAllDocuments() {
-  return QueryCollection({});
-}
-
-async function QueryCollection(query) {
-  const client = new MongoClient(uri, { useNewUrlParser: true });
-  try {
-    await client.connect();
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
-    const documents = await collection.find(query).toArray();
-    return documents;
-  } catch (error) {
-    console.error(error);
-  } finally {
-    client.close();
-  }
-}
-
-async function CountDocuments() {
-  const client = new MongoClient(uri, { useNewUrlParser: true });
-  try {
-    await client.connect();
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
-    const count = await collection.countDocuments();
-    return count;
-  } catch (error) {
-    console.error(error);
-  } finally {
-    client.close();
-  }
-}
+//         if (exists) {
+//           console.log("Document " + document.fileName + document.fileExt + " already exists in database!");
+//         } else {
+//           const result = await collection.insertOne(document); // Inserts the document, comment out for debugging
+//           console.log('Inserted document ' + document.fileName + document.fileExt + ' into the collection');
+//         }
+//     } catch (err) {
+//         console.log(err.stack);
+//     } finally {
+//         client.close();
+//     }
+// }
 
 async function GetDocumentsWithRoot(root, deep=false) {
   if (deep) {
@@ -113,10 +64,6 @@ async function GetDocumentsWithRoot(root, deep=false) {
     var query = { "dirPath" : root };
   }
   return QueryCollection(query);
-}
-
-async function GetDocumentById(id) {
-  return QueryCollection({"_id" : id});
 }
 
 async function walkDir(dir) {
@@ -288,4 +235,4 @@ async function RenameFile(oldName, newName, dir) {
   }
 }
 
-export {InsertDocument, GetAllDocuments, GetDocumentsWithRoot, walkDir, InsertFilesystem, QueryCollection, CountDocuments, RenameFile};
+export { GetDocumentsWithRoot, walkDir, InsertFilesystem, RenameFile};

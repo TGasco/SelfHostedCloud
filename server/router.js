@@ -8,8 +8,10 @@ let router = express.Router();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const homedir = os.homedir();
-
 const baseDir = join(homedir, "SelfHostedCloudDrive");
+
+const fileCollection = "myDrive";
+const userCollection = "userCredentials";
 
 router.get('/myDrive', function(req, res) {
     res.setHeader('Content-type', 'text/html');
@@ -36,7 +38,19 @@ router.get('/metadata', (req, res) => {
     const currDir = req.query.relpath;
     console.log(currDir);
     GetDocumentsWithRoot(join(baseDir, currDir)).then(data => {res.send(data)});
-  })
+});
+
+router.get('/basedir', (req, res) => {
+    res.send(baseDir);
+});
+
+router.get('/fileCollection', (req, res) => {
+    res.send(fileCollection);
+});
+
+router.get('/userCollection', (req, res) => {
+    res.send(userCollection);
+});
 
 function VerifyRoute() {
 

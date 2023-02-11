@@ -1,4 +1,4 @@
-function init_grid(path) {
+async function init_grid(path) {
   const grid = document.getElementById("grid"); // Get the grid element
   grid.innerHTML = ""; // Clear the grid
   fetch("/metadata?relpath=" + path).then((response) => response.json()).then((files) => {
@@ -49,8 +49,9 @@ function init_grid(path) {
 }
 
 function GetRelativePath(path) {
-  // TEMP: Remove this when I get the server to return relative paths
-  return path.replace("/Users/thomasgascoyne/SelfHostedCloudDrive", "");
+  fetch("/basedir").then((response) => response.json()).then((baseDir) => {
+    return path.replace(baseDir, "");
+  });
 }
 
 function GetRelativePath2(path) {

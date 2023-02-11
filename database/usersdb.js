@@ -6,46 +6,48 @@ import fs from 'fs';
 import os from 'os';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname, join } from 'path';
+import { GetDocumentById, InsertDocument } from './dbops.js';
 
 // Define the MongoDB connection URI
 const uri = "mongodb://127.0.0.1:27017"
 const dbName = "self-hosted-cloud";
 const collectionName = "userCredentials";
+const userId = "63e6d759ecbacadf9cc52f25";
 
 const homedir = os.homedir();
 const baseDir = join(homedir, "SelfHostedCloudDrive");
 
-// Define the schema for the documents
-const userDefaultsSchema = new mongoose.Schema({
-  baseDir: { type: String, default: baseDir }
-});
-
-const userCredentialsSchema = new mongoose.Schema({
-  userName: { type: String, required: true },
-  userPass: { type: String, required: true },
-  userDefaults: { type: userDefaultsSchema, required: true }
-});
-
-const UserCredentialsModel = mongoose.model('UserCredentials', userCredentialsSchema, collectionName);
-
 async function NewUser(userName, userPass, userDefaults=null) {
+  var user;
   if (userDefaults == null) {
-    const user = new UserCredentialsModel({
+    user = {
       userName: userName,
-      userPass: userPass
-    });
+      userPass: userPass,
+      userDefaults: { baseDir: baseDir }
+    };
   } else {
-    const user = new UserCredentialsModel({
+    user = {
       userName: userName,
       userPass: userPass,
       userDefaults: userDefaults
-    });
+    };
   }
 
   try {
-    const result = await user.save();
-    console.log(result);
+    return InsertDocument(user, collectionName);
   } catch (err) {
     console.log(err);
   }
 }
+
+function GetUserId() {
+  return userId;
+}
+
+async function GetBaseDir() {
+  const userId = GetUserId();
+  const user = await GetDocumentById(userId, collectionName);
+  return user[0].userDefaults.baseDir;
+}
+
+export { NewUser, GetUserId, GetBaseDir };

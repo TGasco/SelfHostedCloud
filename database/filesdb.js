@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname, join } from 'path';
-
+import { InsertDocument, QueryCollection, UpdateDocument } from './dbops.js';
 // Define the MongoDB connection URI
 const uri = "mongodb://127.0.0.1:27017"
 const dbName = "self-hosted-cloud";
@@ -27,43 +27,14 @@ const fileSchema = {
 // Create a model for the file metadata
 const File = mongoose.model("myDrive", fileSchema, collectionName);
 
-// async function InsertDocument(document) {
-//     const client = new MongoClient(uri, { useNewUrlParser: true });
-//     try {
-//         await client.connect();
-//         const db = client.db(dbName);
-//         const collection = db.collection(collectionName);
-
-//         // Check if document already exists in database, skip if it does
-//         const exists = await QueryCollection({"dirPath" : document.dirPath, "fileName" : document.fileName, "fileExt" : document.fileExt}).then(data => {
-//           if (data.length > 0) {
-//             return true;
-//           } else {
-//             return false;
-//           }
-//         });
-
-//         if (exists) {
-//           console.log("Document " + document.fileName + document.fileExt + " already exists in database!");
-//         } else {
-//           const result = await collection.insertOne(document); // Inserts the document, comment out for debugging
-//           console.log('Inserted document ' + document.fileName + document.fileExt + ' into the collection');
-//         }
-//     } catch (err) {
-//         console.log(err.stack);
-//     } finally {
-//         client.close();
-//     }
-// }
-
 async function GetDocumentsWithRoot(root, deep=false) {
   if (deep) {
     var query = new RegExp("^" + root + "(\\/.*)*$");
-    return QueryCollection({"dirPath" : { $regex: query } });
+    return QueryCollection({"dirPath" : { $regex: query } }, collectionName);
   } else {
     var query = { "dirPath" : root };
   }
-  return QueryCollection(query);
+  return QueryCollection(query, collectionName);
 }
 
 async function walkDir(dir) {
@@ -178,12 +149,12 @@ function isDir(path) {
 function ExpandDir(dirPath) {
   // Directory!
   if (typeof dirPath === 'object') {
-    getFileMetadata(dirPath.dir).then(metadata => {InsertDocument(metadata)});
+    getFileMetadata(dirPath.dir).then(metadata => {InsertDocument(metadata, collectionName)});
     for (let j = 0; j < dirPath.files.length; j++) {
       ExpandDir(dirPath.files[j]);
     }
   } else {
-    getFileMetadata(dirPath).then(metadata => {InsertDocument(metadata)});
+    getFileMetadata(dirPath).then(metadata => {InsertDocument(metadata, collectionName)});
   }
 }
 
@@ -193,7 +164,7 @@ function InsertFilesystem(dir) {
       if (typeof files[i] === 'object') {
         ExpandDir(files[i]);
       } else {
-        getFileMetadata(files[i]).then(metadata => {InsertDocument(metadata)});
+        getFileMetadata(files[i]).then(metadata => {InsertDocument(metadata, collectionName)});
       }
     }
   });
@@ -203,15 +174,16 @@ async function RenameFile(oldName, newName, dir) {
   // Rename the file on the host filesystem
   const oldPath = path.join(dir, oldName);
   const newPath = path.join(dir, newName);
+  const query = {fileName: oldName, dirPath: dir};
 
   // Rename the file on the host filesystem: Comment out for testing
-  // fs.rename(oldPath, newPath, (err) => {
-  //   if (err) {
-  //     console.log(err);
-  //   } else {
-  //     console.log("Successfully renamed the file!");
-  //   }
-  // });
+  fs.rename(oldPath, newPath, (err) => {
+      if (err) {
+          console.log(err);
+      } else {
+          console.log("Successfully renamed the file!");
+      }
+  });
 
   // Update the records in the database
   const client = new MongoClient(uri, { useNewUrlParser: true });
@@ -219,15 +191,23 @@ async function RenameFile(oldName, newName, dir) {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection(collectionName);
-    GetDocumentsWithRoot(oldPath, true).then(documents => {
+    // Updates any descendants of the old path to the new path
+    await GetDocumentsWithRoot(oldPath, true).then(documents => {
       for (let i = 0; i < documents.length; i++) {
-        const id = documents[i]._id;
-        const oldPath = path.join(documents[i].dirPath, documents[i].fileName);
+        const oldPath = path.join(documents[i].dirPath);
         const newPath = oldPath.replace(oldName, newName);
-        // collection.updateOne({ "_id" : id }, { $set: { "dirPath" : newPath}});
+        UpdateDocument(documents[i], { $set: { "dirPath" : newPath}}, collectionName);
         console.log("Updating " + oldPath + " to " + newPath);
       }
     });
+
+    await QueryCollection(query, collectionName).then(document => {
+      console.log(document);
+      const currentDate = new Date().toISOString();
+      UpdateDocument(document[0], { $set: { "fileName" : newName, "lastModified" : currentDate}}, collectionName);
+      console.log("Updating " + oldName + " to " + newName + " at " + currentDate);
+    });
+
   } catch (error) {
     console.error(error);
   } finally {

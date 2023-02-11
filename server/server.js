@@ -14,6 +14,7 @@ import {
   DocumentExists,
   GetAllDocuments,
   GetDocumentById,
+  RemoveDocument,
 } from "../database/dbops.js";
 import multer from "multer";
 import { basename, extname, dirname, join } from "path";
@@ -42,10 +43,5 @@ var server = app.listen(PORT, function () {
 
 // InsertFilesystem(await GetBaseDir());
 
-// RenameFile("RandoFolder2", "ItWorks2", await GetBaseDir());
 
-GetAllDocuments("myDrive").then(data => console.log(data));
-
-// const sampledoc = GetDocumentById("63dedf550473a1236832a601", "myDrive").then(
-//   (data) => DocumentExists(data[0], "myDrive").then((data) => console.log(data))
-// );
+// GetAllDocuments("myDrive").then(data => console.log(data));

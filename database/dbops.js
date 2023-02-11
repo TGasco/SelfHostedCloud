@@ -108,8 +108,15 @@ async function RemoveDocument(document, collectionName) {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection(collectionName);
-    const result = await collection.deleteOne(document);
-    console.log("Removed 1 document from the collection");
+    // Check if document exists in database, throw error if it doesn't
+    const exists = await DocumentExists(document, collectionName);
+    if (!exists) {
+      throw "Document does not exist in database!";
+    } else {
+      const result = await collection.deleteOne(document);
+      console.log("Removed 1 document from the collection");
+    }
+
   } catch (err) {
     console.log(err.stack);
   } finally {

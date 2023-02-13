@@ -11,7 +11,7 @@ async function init_grid(path) {
       rowDiv.id = "row-" + i;
       rowDiv.className = "row";
       grid.appendChild(rowDiv);
-      if (i < gridSize) {
+      if (i < gridSize && gridSize > 1) {
         var rowLength = 4;
       } else {
         var rowLength = lastRow;
@@ -21,14 +21,19 @@ async function init_grid(path) {
         const colDiv = document.createElement("div");
         colDiv.id = "col-" + i + "-" + j;
         colDiv.className = "col " + files[fIndex]._id;
+
+        colDiv.addEventListener("contextmenu", (e) => {
+          showContextMenu(e, files[fIndex]);
+        });
+
         if (files[fIndex].isDirectory) {
-          colDiv.addEventListener("click", () => {
-            event.preventDefault();
-            const relpath = GetRelativePath(files[fIndex].dirPath + "/" + files[fIndex].fileName)
-            // init_grid(relpath);
-            init_grid(path + "/" + files[fIndex].fileName)
-            // currDir.innerHTML = "My Drive" + relpath;
-            console.log(path)
+          colDiv.addEventListener("click", (e) => {
+            e.preventDefault();
+            init_grid(path + "/" + files[fIndex].fileName);
+          });
+        } else {
+          colDiv.addEventListener("click", (e) => {
+            e.preventDefault();
           });
         }
         rowDiv.appendChild(colDiv);
@@ -45,7 +50,7 @@ async function init_grid(path) {
         colDiv.appendChild(fileName);
       }
     }
-  })
+  });
 }
 
 function GetRelativePath(path) {
@@ -159,10 +164,173 @@ function GetFileIcon(file) {
   }
 }
 
+async function getElementClass(element, index=null) {
+  return new Promise((resolve, reject) => {
+    const classes = element.classList;
+    console.log(classes);
+    if (typeof index === "number") {
+      resolve(classes[index]);
+    } else {
+      resolve(classes);
+    }
+  });
+}
+
+// Event Listeners
 document.getElementById("back-btn").addEventListener("click", () => {
   GetPreviousDir(document.getElementById("curr-dir").innerHTML).then((prevDir) => {
     console.log(prevDir);
     init_grid(GetRelativePath2(prevDir));
   });
 });
+
+// Global event listeners
+// Used for keeping track of dynamically added event listeners
+let hideContextMenuListener;
+let showContextMenuListener;
+let downloadFileListener;
+let showFileInfoListener;
+let renameFileListener;
+let deleteFileListener;
+let favouriteFileListener;
+
+var hideContextMenu = (e, file) => {
+  const contextMenu = document.getElementById("context-menu");
+  if (!contextMenu.contains(e.target)) {
+
+    contextMenu.style.opacity = 0;
+    contextMenu.style.transform = "scale(0)";
+    setTimeout(function() {
+      contextMenu.classList.remove(file._id);
+      contextMenu.classList.add("hidden");
+    }, 300);
+
+    document.removeEventListener("click", hideContextMenuListener);
+    hideContextMenuListener = null;
+    document.getElementById("download-file").removeEventListener("click", downloadFileListener);
+    downloadFileListener = null;
+  }
+};
+
+var downloadFile = (e, file) => {
+  var win = window.open("/download?fileId=" + file._id);
+  setTimeout(() => {
+    if (!win.closed) {
+      win.close();
+    }
+  }, 300);
+}
+
+var showFileInfo = (e, file) => {
+  fetch ("/fileinfo?fileId=" + file._id).then((res) => {
+    return res.json();
+  }).then((data) => {
+    console.log(data);
+    // const fileInfo = document.getElementById("file-info");
+    // const fileInfoItems = fileInfo.querySelectorAll(".file-info-item");
+    // fileInfo.classList.remove("hidden");
+    // fileInfo.classList.add(file._id);
+    // fileInfo.style.left = event.clientX + "px";
+    // fileInfo.style.top = event.clientY + "px";
+    // setTimeout(() => {
+    //   fileInfo.style.opacity = 1;
+    //   fileInfo.style.transform = "scale(1)";
+    // }, 100);
+    // fileInfoItems[0].innerHTML = "Name: " + file.name;
+    // fileInfoItems[1].innerHTML = "Size: " + data.size;
+    // fileInfoItems[2].innerHTML = "Type: " + data.type;
+    // fileInfoItems[3].innerHTML = "Last Modified: " + data.lastModified;
+  });
+}
+
+var favouriteFile = (e, file) => {
+  fetch ("/togglefavourite?fileId=" + file._id).then((res) => {
+    return res.json();
+  }).then((data) => {
+    console.log( data.isFavourited);
+  });
+}
+
+var renameFile = (e, file) => {
+  fetch ("/file-rename?fileId=" + file._id).then((res) => {
+    return res.text();
+  }).then((data) => {
+    console.log(data);
+  });
+}
+
+var showContextMenu = function showContextMenuListener (e, file) {
+  e.preventDefault();
+
+  if (hideContextMenuListener != null) {
+    document.removeEventListener("click", hideContextMenuListener);
+    hideContextMenuListener = null;
+  }
+  hideContextMenuListener = hideContextMenu.bind(null, e, file);
+
+
+  if (downloadFileListener != null) {
+    document.getElementById("download-file").removeEventListener("click", downloadFileListener);
+    downloadFileListener = null;
+  }
+  downloadFileListener = downloadFile.bind(null, e, file);
+
+  if (showFileInfoListener != null) {
+    document.getElementById("file-info").removeEventListener("click", showFileInfoListener);
+    showFileInfoListener = null;
+  }
+  showFileInfoListener = showFileInfo.bind(null, e, file);
+
+  if (favouriteFileListener != null) {
+    document.getElementById("favourite-file").removeEventListener("click", favouriteFileListener);
+    favouriteFileListener = null;
+  }
+  favouriteFileListener = favouriteFile.bind(null, e, file);
+  const favouriteItem = document.getElementById("favourite-file");
+  fetch ("/isfavourited?fileId=" + file._id).then((res) => {
+    return res.json();
+  }).then((data) => {
+    if (data.isFavourited) {
+      favouriteItem.innerHTML = "Unfavourite";
+    } else {
+      favouriteItem.innerHTML = "Favourite";
+    }
+  });
+
+  // Show context menu
+  const contextMenu = document.getElementById("context-menu");
+  const contextMenuItems = contextMenu.querySelectorAll(".context-menu-item");
+  contextMenu.classList.remove("hidden");
+  contextMenu.classList.add(file._id);
+  contextMenu.style.left = event.clientX + "px";
+  contextMenu.style.top = event.clientY + "px";
+  setTimeout(function() {
+    contextMenu.style.opacity = 1;
+    contextMenu.style.transform = "scale(1)";
+  }, 0);
+
+  let n = 0;
+  contextMenuItems.forEach((item) => {
+    setTimeout(function() {
+      item.style.transform = "translateY(0)";
+      item.style.opacity = 1;
+    }, n * 50);
+    n++;
+  });
+
+
+  document.getElementById("download-file").addEventListener("click", downloadFileListener);
+
+  document.getElementById("file-info").addEventListener("click", showFileInfoListener);
+
+  document.getElementById("favourite-file").addEventListener("click", favouriteFileListener);
+
+  document.addEventListener("click", hideContextMenuListener);
+}
+
+var showFileInfo = function showFileInfoListener(e, file) {
+  // Show the file info panel here, populate it with file info
+  console.log(file);
+}
+
 window.onload = init_grid("");

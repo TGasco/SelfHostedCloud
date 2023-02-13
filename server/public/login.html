@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="UTF-8">
@@ -7,9 +7,9 @@
         <link rel="stylesheet" type="text/css" href="./css/main.css">
         <title>Self Hosted Cloud--Login</title>
     </head>
-    <body>
+    <body> -->
         <!-- Main static page elements here -->
-        <div class="title">
+        <!-- <div class="title">
             <h4>Login Form</h4>
         </div>
 
@@ -26,4 +26,28 @@
                 </div>
         </div>
     </body>
+</html> -->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" href="/css/login.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <div class="container">
+      <form onsubmit="return submitForm(event)">
+        <h2>Login</h2>
+        <div class="input-field">
+          <input type="text" id="username" placeholder="Username" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+        </div>
+        <div class="input-field">
+          <input type="password" id="password" placeholder="Password" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+        </div>
+        <div class="error-message" id="errorMessage"></div>
+        <button type="submit" onmousedown="pressButton(this)" onmouseup="releaseButton(this)">Login</button>
+      </form>
+    </div>
+    <script src="/js/login.js"></script>
+  </body>
 </html>

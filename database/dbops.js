@@ -49,11 +49,20 @@ async function QueryCollection(query, collectionName) {
 }
 
 async function GetDocumentById(id, collectionName) {
-  if (typeof id == "string") {
-    id = new ObjectId(id);
-  }
+  let objectId;
+
+  await new Promise((resolve, reject) => {
+    if (typeof id == "string") {
+      objectId = new ObjectId(id);
+      resolve(objectId);
+    } else {
+      objectId = id;
+      resolve(objectId);
+    }
+  });
+
   try {
-    return QueryCollection({ _id: id }, collectionName);
+    return QueryCollection({ _id: objectId }, collectionName);
   } catch (error) {
     console.error(error);
   }
@@ -130,7 +139,7 @@ async function UpdateDocument(document, updatedPairs, collectionName) {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection(collectionName);
-    const result = await collection.updateOne({ "_id" : document._id }, updatedPairs);
+    const result = await collection.updateOne({ "_id" : document._id }, {$set: updatedPairs});
     console.log("Updated 1 document from the collection");
     return result;
   } catch (err) {

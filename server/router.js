@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { GetDocumentsWithRoot } from "../database/filesdb.js";
 import { GetBaseDir, GetUserId } from "../database/usersdb.js";
 import os from "os";
-import { GetDocumentById } from "../database/dbops.js";
+import { GetDocumentById, UpdateDocument } from "../database/dbops.js";
 let router = express.Router();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -56,6 +56,60 @@ router.get("/fileCollection", (req, res) => {
 
 router.get("/userCollection", (req, res) => {
   res.send(userCollection);
+});
+
+router.get("/download" , (req, res) => {
+  const fileId = req.query.fileId;
+  GetDocumentById(fileId, "myDrive").then((file) => {
+    const path = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
+    res.download(path, (err) => {
+      if (err) {
+        res.status(404).send("File not found!");
+      }
+    });
+  });
+});
+
+router.get("/file-rename" , (req, res) => {
+  const fileId = req.query.fileId;
+  GetDocumentById(fileId, "myDrive").then((file) => {
+    // Rename file here
+    res.send(file[0].fileName + file[0].fileExt + " renamed");
+  });
+});
+
+router.get("/file-info" , (req, res) => {
+  const fileId = req.query.fileId;
+  GetDocumentById(fileId, "myDrive").then((file) => {
+    res.send(file[0]);
+  });
+});
+
+router.get("/isfavourited" , (req, res) => {
+  const fileId = req.query.fileId;
+  GetDocumentById(fileId, "myDrive").then((file) => {
+    res.send({"isFavourited": file[0].isFavourited});
+  });
+});
+
+router.get("/togglefavourite" , (req, res) => {
+  const fileId = req.query.fileId;
+  GetDocumentById(fileId, "myDrive").then((file) => {
+    // Toggle favourite here
+    UpdateDocument(file[0], {"isFavourited": !file[0].isFavourited}, "myDrive").then(() => {
+      GetDocumentById(fileId, "myDrive").then((file) => {
+        res.send({"isFavourited": file[0].isFavourited});
+      });
+    });
+  });
+});
+
+router.get("/file-delete" , (req, res) => {
+  const fileId = req.query.fileId;
+  GetDocumentById(fileId, "myDrive").then((file) => {
+    // Delete file here
+    res.send(file[0].fileName + file[0].fileExt + " deleted");
+  });
 });
 
 // This code exports the router object to make it available for other parts of the application.

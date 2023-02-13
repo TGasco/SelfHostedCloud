@@ -1,24 +1,8 @@
-import http from "http";
 import express from "express";
-import os from "os";
-import { stat as _stat, access, F_OK, lstatSync } from "fs";
+import { stat as _stat } from "fs";
 import { fileURLToPath } from "url";
-import mongoose from "mongoose";
 import router from "./router.js";
-import {
-  GetDocumentsWithRoot,
-  InsertFilesystem,
-  RenameFile,
-} from "../database/filesdb.js";
-import {
-  DocumentExists,
-  GetAllDocuments,
-  GetDocumentById,
-  RemoveDocument,
-} from "../database/dbops.js";
-import multer from "multer";
-import { basename, extname, dirname, join } from "path";
-import { GetBaseDir, NewUser } from "../database/usersdb.js";
+import { dirname, join } from "path";
 
 // Initialise middleware
 let app = express();

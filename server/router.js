@@ -1,12 +1,28 @@
 // This code imports the Express.js module and creates a new router object.
 import express from "express";
-import { join, dirname } from "path";
+import multer from "multer";
+import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
-import { GetDocumentsWithRoot } from "../database/filesdb.js";
+import fs from "fs";
+import { Extract } from "unzipper";
+import { GetDocumentsWithRoot, ZipDir } from "../database/filesdb.js";
 import { GetBaseDir, GetUserId } from "../database/usersdb.js";
 import os from "os";
 import { GetDocumentById, UpdateDocument } from "../database/dbops.js";
 let router = express.Router();
+
+const storage = multer.diskStorage({
+  destination: async (req, file, callback) => {
+    await GetBaseDir().then((baseDir) => {
+      callback(null, baseDir);
+    });
+  },
+  filename: (req, file, callback) => {
+    callback(null, file.originalname);
+  }
+})
+
+let upload = multer({ storage: storage});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -62,11 +78,33 @@ router.get("/download" , (req, res) => {
   const fileId = req.query.fileId;
   GetDocumentById(fileId, "myDrive").then((file) => {
     const path = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
-    res.download(path, (err) => {
-      if (err) {
-        res.status(404).send("File not found!");
-      }
-    });
+    if (file[0].isDirectory) {
+      ZipDir(path, function(err) {
+        console.log("Downloading directory!");
+        if (err) {
+          res.status(500).send("Error zipping directory");
+        } else {
+          res.download(path + ".zip", (err) => {
+            if (err) {
+              res.status(500).send("Error sending files to client");
+            } else {
+              // Delete zip file and extracted contents
+              fs.unlink(path + ".zip", (err) => {
+                if (err) {
+                  console.log("Error deleting zip file");
+                }
+              });
+            }
+          });
+        }
+      });
+    } else {
+      res.download(path, (err) => {
+        if (err) {
+          res.status(404).send("File not found!");
+        }
+      });
+    }
   });
 });
 
@@ -110,6 +148,11 @@ router.get("/file-delete" , (req, res) => {
     // Delete file here
     res.send(file[0].fileName + file[0].fileExt + " deleted");
   });
+});
+
+// POST Requests
+router.post("/upload", upload.single("file"), (req, res) => {
+  res.send("File uploaded successfully");
 });
 
 // This code exports the router object to make it available for other parts of the application.

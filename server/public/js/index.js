@@ -218,7 +218,7 @@ var downloadFile = (e, file) => {
     if (!win.closed) {
       win.close();
     }
-  }, 300);
+  }, 2500);
 }
 
 var showFileInfo = (e, file) => {
@@ -332,5 +332,27 @@ var showFileInfo = function showFileInfoListener(e, file) {
   // Show the file info panel here, populate it with file info
   console.log(file);
 }
+
+var uploadFile = () => {
+  const input = document.createElement("input");
+  input.type = "file";
+
+  input.onchange = e => {
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+    fetch("/upload", {
+      method: "POST",
+      body: formData
+    }).then((res) => {
+      console.log(res);
+    }).catch((err) => {
+      console.log(err);
+    });
+  }
+  input.click();
+}
+
+document.getElementById("upload-btn").addEventListener("click", uploadFile);
 
 window.onload = init_grid("");

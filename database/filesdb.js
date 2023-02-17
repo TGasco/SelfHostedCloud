@@ -3,6 +3,7 @@ import { MongoClient, MongoTopologyClosedError } from 'mongodb';
 import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
+import archiver from 'archiver';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname, join } from 'path';
 import { InsertDocument, QueryCollection, UpdateDocument } from './dbops.js';
@@ -158,6 +159,37 @@ function ExpandDir(dirPath) {
   }
 }
 
+function ZipDir(source, callback) {
+  const target = source + '.zip';
+  const stream = fs.createWriteStream(target);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+
+  stream.on('close', function() {
+    console.log(archive.pointer() + ' total bytes');
+    console.log('archiver has been finalized and the output file descriptor has closed.');
+    console.log("Zip file created at " + target);
+    callback(null);
+  });
+
+  archive.on('error', function(err) {
+    console.log("Error creating zip file! (1)");
+    callback(err);
+  });
+
+  archive.pipe(stream);
+  archive.directory(source, false);
+
+  archive.finalize(function(err) {
+    if (err) {
+      console.log("Error creating zip file! (2)");
+      callback(err);
+    } else {
+      console.log('Zip file created: ' + target);
+      callback(null);
+    }
+  });
+}
+
 function InsertFilesystem(dir) {
   walkDir(dir).then(files => {
     for (let i = 0; i < files.length; i++) {
@@ -215,4 +247,4 @@ async function RenameFile(oldName, newName, dir) {
   }
 }
 
-export { GetDocumentsWithRoot, walkDir, InsertFilesystem, RenameFile};
+export { GetDocumentsWithRoot, walkDir, InsertFilesystem, RenameFile, ZipDir};

@@ -202,20 +202,15 @@ function InsertFilesystem(dir) {
   });
 }
 
-async function RenameFile(oldName, newName, dir) {
+async function RenameFile(file, newName) {
   // Rename the file on the host filesystem
+  const oldName = file.fileName;
+  const dir = file.dirPath;
   const oldPath = path.join(dir, oldName);
   const newPath = path.join(dir, newName);
   const query = {fileName: oldName, dirPath: dir};
 
   // Rename the file on the host filesystem: Comment out for testing
-  fs.rename(oldPath, newPath, (err) => {
-      if (err) {
-          console.log(err);
-      } else {
-          console.log("Successfully renamed the file!");
-      }
-  });
 
   // Update the records in the database
   const client = new MongoClient(uri, { useNewUrlParser: true });
@@ -225,26 +220,32 @@ async function RenameFile(oldName, newName, dir) {
     const collection = db.collection(collectionName);
     // Updates any descendants of the old path to the new path
     await GetDocumentsWithRoot(oldPath, true).then(documents => {
-      for (let i = 0; i < documents.length; i++) {
-        const oldPath = path.join(documents[i].dirPath);
-        const newPath = oldPath.replace(oldName, newName);
-        UpdateDocument(documents[i], { $set: { "dirPath" : newPath}}, collectionName);
-        console.log("Updating " + oldPath + " to " + newPath);
+      if (documents.length > 0) {
+        for (let i = 0; i < documents.length; i++) {
+          const oldPath = path.join(documents[i].dirPath);
+          const newPath = oldPath.replace(oldName, newName);
+          UpdateDocument(documents[i], {"dirPath": newPath}, collectionName);
+          console.log("Updating " + oldPath + " to " + newPath);
+        }
       }
     });
 
-    await QueryCollection(query, collectionName).then(document => {
-      console.log(document);
-      const currentDate = new Date().toISOString();
-      UpdateDocument(document[0], { $set: { "fileName" : newName, "lastModified" : currentDate}}, collectionName);
-      console.log("Updating " + oldName + " to " + newName + " at " + currentDate);
-    });
+    const currentDate = new Date();
+    await UpdateDocument(file, {"fileName" : newName, "lastModified" : currentDate}, collectionName);
+    console.log("Updating " + oldName + " to " + newName + " at " + currentDate);
 
   } catch (error) {
     console.error(error);
   } finally {
+    fs.rename(oldPath + file.fileExt, newPath + file.fileExt, (err) => {
+        if (err) {
+            console.log(err);
+        } else {
+            console.log("Successfully renamed the file!");
+        }
+    });
     client.close();
   }
 }
 
-export { GetDocumentsWithRoot, walkDir, InsertFilesystem, RenameFile, ZipDir};
+export { GetDocumentsWithRoot, walkDir, InsertFilesystem, RenameFile, ZipDir, getFileMetadata};

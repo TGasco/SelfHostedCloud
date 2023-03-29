@@ -139,9 +139,22 @@ async function UpdateDocument(document, updatedPairs, collectionName) {
     await client.connect();
     const db = client.db(dbName);
     const collection = db.collection(collectionName);
-    const result = await collection.updateOne({ "_id" : document._id }, {$set: updatedPairs});
-    console.log("Updated 1 document from the collection");
-    return result;
+    console.log(updatedPairs);
+
+    const updatePipeline = [
+      {$set: updatedPairs},
+      {$replaceWith: "$$ROOT"},
+    ]
+
+    await collection.updateOne({ "_id" : document._id }, updatePipeline
+    ).then((result) => {
+      if (result.modifiedCount === 0) {
+        throw "Could not update document.";
+      } else {
+        console.log("Updated 1 document from the collection: " + result.modifiedCount);
+        return result;
+      }
+    });
   } catch (err) {
     console.log(err.stack);
   } finally {

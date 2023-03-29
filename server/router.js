@@ -5,17 +5,20 @@ import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { Extract } from "unzipper";
-import { GetDocumentsWithRoot, ZipDir } from "../database/filesdb.js";
-import { GetBaseDir, GetUserId } from "../database/usersdb.js";
+import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile } from "../database/filesdb.js";
+import { GetBaseDir, GetUserByCreds } from "../database/usersdb.js";
 import os from "os";
-import { GetDocumentById, UpdateDocument } from "../database/dbops.js";
+import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection } from "../database/dbops.js";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import { comparePasswords } from "../database/crypt.js";
+
 let router = express.Router();
 
+var currDir = await GetBaseDir();
 const storage = multer.diskStorage({
   destination: async (req, file, callback) => {
-    await GetBaseDir().then((baseDir) => {
-      callback(null, baseDir);
-    });
+      callback(null, currDir);
   },
   filename: (req, file, callback) => {
     callback(null, file.originalname);
@@ -29,7 +32,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const fileCollection = "myDrive";
 const userCollection = "userCredentials";
 
+
 router.get("/myDrive", function (req, res) {
+  const file = req.query.file;
+  console.log(file);
   res.setHeader("Content-type", "text/html");
   res.sendFile(__dirname + "/" + "public/index.html");
 });
@@ -45,18 +51,47 @@ router.get("/login", function (req, res) {
 // This code sets up a new route for a POST request to the '/login' path,
 // and defines a callback function to handle the request.
 // The callback function sends a response with the message 'Login successful'.
-router.post("/login", function (req, res) {
-  res.send("Login successful");
+router.post("/login", async (req, res) => {
+  try {
+    const username = req.body.username;
+    const password = req.body.password;
+    const user = await GetUserByCreds(username);
+    console.log(password);
+    // If user not found, return error
+    if (!user[0]) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Compare password hashes
+    const isMatch = await comparePasswords(password, user[0].userPass);
+
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+    console.log("Passwords match, authenticate user");
+
+    // Generate JWT token
+    const token = jwt.sign({ userId: user[0]._id }, 'secret', { expiresIn: '1h' });
+
+    res.status(200).json({ token });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server error' });
+  }
 });
 
 // GET Requests
 router.get("/metadata", (req, res) => {
-  const currDir = req.query.relpath;
-  console.log(currDir);
-  GetBaseDir().then((baseDir) => {
-    GetDocumentsWithRoot(join(baseDir, currDir)).then((data) => {
-      res.send(data);
-    });
+  const path = req.query.path;
+  GetDocumentsWithRoot(path).then((data) => {
+    res.send(data);
+  });
+});
+
+router.get("/get-favourites", (req, res) => {
+  const query = { isFavourited: true };
+  QueryCollection(query, fileCollection).then((data) => {
+    res.send(data);
   });
 });
 
@@ -64,6 +99,15 @@ router.get("/basedir", (req, res) => {
   GetBaseDir().then((data) => {
     res.send(data);
   });
+});
+
+router.get("/get-currdir", (req, res) => {
+    res.send(currDir);
+});
+
+router.post("/currdir", (req, res) => {
+  currDir = req.body.currDir;
+  res.send(req.body);
 });
 
 router.get("/fileCollection", (req, res) => {
@@ -110,9 +154,12 @@ router.get("/download" , (req, res) => {
 
 router.get("/file-rename" , (req, res) => {
   const fileId = req.query.fileId;
+  const newName = req.query.newName;
   GetDocumentById(fileId, "myDrive").then((file) => {
     // Rename file here
-    res.send(file[0].fileName + file[0].fileExt + " renamed");
+    RenameFile(file[0], newName).then(() => {
+      res.send(file[0].fileName + file[0].fileExt + " renamed to " + newName);
+    });
   });
 });
 
@@ -146,13 +193,20 @@ router.get("/file-delete" , (req, res) => {
   const fileId = req.query.fileId;
   GetDocumentById(fileId, "myDrive").then((file) => {
     // Delete file here
+    RemoveDocument(file[0], "myDrive");
+    fs.rmSync(join(file[0].dirPath, file[0].fileName + file[0].fileExt));
     res.send(file[0].fileName + file[0].fileExt + " deleted");
   });
 });
 
 // POST Requests
 router.post("/upload", upload.single("file"), (req, res) => {
-  res.send("File uploaded successfully");
+  const file = req.file;
+  getFileMetadata(file.path).then((metadata) => {
+    InsertDocument(metadata, "myDrive").then(() => {
+      res.send("File uploaded successfully");
+    });
+  });
 });
 
 // This code exports the router object to make it available for other parts of the application.

@@ -1,9 +1,13 @@
+import { BytesToSize, ConvertDate } from './helperfuncs.js';
+
+var currDir = "";
+
 async function init_grid(path) {
   const grid = document.getElementById("grid"); // Get the grid element
   grid.innerHTML = ""; // Clear the grid
-  fetch("/metadata?relpath=" + path).then((response) => response.json()).then((files) => {
-    const currDir = document.getElementById("curr-dir");
-    currDir.innerHTML = "My Drive" + path;
+  fetch("/metadata?path=" + path).then((res) => res.json()).then(async (files) => {
+    const currDirElement = document.getElementById("curr-dir");
+    currDirElement.innerHTML = path;
     const gridSize = Math.ceil(files.length / 4);
     const lastRow = files.length % 4;
     for (let i = 0; i < gridSize; i++) {
@@ -22,6 +26,7 @@ async function init_grid(path) {
         colDiv.id = "col-" + i + "-" + j;
         colDiv.className = "col " + files[fIndex]._id;
 
+        // Add the contextmenu event listener
         colDiv.addEventListener("contextmenu", (e) => {
           showContextMenu(e, files[fIndex]);
         });
@@ -43,19 +48,67 @@ async function init_grid(path) {
         img.src = GetFileIcon(files[i * 4 + j]);
         colDiv.appendChild(img);
 
-        const fileName = document.createElement("p");
+        const fileName = document.createElement("div");
         fileName.id = "filename-" + i + "-" + j;
         fileName.className = "grid-filename";
         fileName.innerHTML = files[fIndex].fileName;
         colDiv.appendChild(fileName);
+
+        const editFileInputField = document.getElementById("edit-filename");
       }
     }
+
+    // Set the current directory in the server
+    fetch("/currdir", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({currDir: path})
+    }).then((res) => res.json())
+    .then((data) => {
+      // console.log(data.currDir + " is the current directory");
+      currDir = data.currDir;
+    });
   });
 }
 
-function GetRelativePath(path) {
-  fetch("/basedir").then((response) => response.json()).then((baseDir) => {
-    return path.replace(baseDir, "");
+async function init_favourite_list() {
+  const favList = document.getElementById("favourites-list");
+  favList.innerHTML = "";
+  const favourites = await GetFavourites();
+  for (let i = 0; i < favourites.length; i++) {
+    const fav = document.createElement("li");
+    fav.className = "sidebar-item";
+    const img = document.createElement("img");
+    img.src = GetFileIcon(favourites[i]);
+    img.style.width = "10%";
+    img.style.height = "10%";
+    img.className = "fav-img";
+    fav.appendChild(img);
+    const text = document.createElement("span");
+    text.innerHTML = favourites[i].fileName;
+    text.className = "fav-text";
+    fav.appendChild(text);
+    fav.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (favourites[i].isDirectory) {
+        var filePath = favourites[i].dirPath + "/" + favourites[i].fileName;
+      } else {
+        var filePath = favourites[i].dirPath;
+      }
+      if (filePath != currDir) {
+        init_grid(filePath);
+      }
+    });
+    favList.appendChild(fav);
+  }
+}
+
+
+async function GetRelativePath(path) {
+  return await fetch("/basedir").then((response) => response.json()).then((baseDir) => {
+    return path.replace(baseDir, "My Drive");
   });
 }
 
@@ -71,6 +124,12 @@ async function GetPreviousDir(path) {
     newPath += splitPath[i] + "/";
   }
   return newPath.slice(0, -1);
+}
+
+async function GetFavourites() {
+  const response = await fetch("/get-favourites");
+  const favourites = await response.json();
+  return favourites;
 }
 
 function GetFileIcon(file) {
@@ -177,10 +236,16 @@ async function getElementClass(element, index=null) {
 }
 
 // Event Listeners
-document.getElementById("back-btn").addEventListener("click", () => {
-  GetPreviousDir(document.getElementById("curr-dir").innerHTML).then((prevDir) => {
-    console.log(prevDir);
-    init_grid(GetRelativePath2(prevDir));
+document.getElementById("back-btn").addEventListener("click", async () => {
+  await getCurrentDir().then((currDir) => {
+    fetch("/basedir").then((response) => response.text()).then((baseDir) => {
+      if (currDir === baseDir) {
+      } else {
+        GetPreviousDir(currDir).then((prevDir) => {
+          init_grid(prevDir);
+        });
+      }
+    });
   });
 });
 
@@ -190,9 +255,13 @@ let hideContextMenuListener;
 let showContextMenuListener;
 let downloadFileListener;
 let showFileInfoListener;
+let hideFileInfoListener;
 let renameFileListener;
 let deleteFileListener;
 let favouriteFileListener;
+let confirmRenameListener;
+let hideInputFieldListener;
+let keyEnterEventListener;
 
 var hideContextMenu = (e, file) => {
   const contextMenu = document.getElementById("context-menu");
@@ -209,6 +278,8 @@ var hideContextMenu = (e, file) => {
     hideContextMenuListener = null;
     document.getElementById("download-file").removeEventListener("click", downloadFileListener);
     downloadFileListener = null;
+    document.getElementById("rename-file").removeEventListener("click", renameFileListener);
+    renameFileListener = null;
   }
 };
 
@@ -221,42 +292,116 @@ var downloadFile = (e, file) => {
   }, 2500);
 }
 
-var showFileInfo = (e, file) => {
-  fetch ("/fileinfo?fileId=" + file._id).then((res) => {
-    return res.json();
+var deleteFile = (e, file) => {
+  fetch("/file-delete?fileId=" + file._id).then((res) => {
+    return res.text();
   }).then((data) => {
-    console.log(data);
-    // const fileInfo = document.getElementById("file-info");
-    // const fileInfoItems = fileInfo.querySelectorAll(".file-info-item");
-    // fileInfo.classList.remove("hidden");
-    // fileInfo.classList.add(file._id);
-    // fileInfo.style.left = event.clientX + "px";
-    // fileInfo.style.top = event.clientY + "px";
-    // setTimeout(() => {
-    //   fileInfo.style.opacity = 1;
-    //   fileInfo.style.transform = "scale(1)";
-    // }, 100);
-    // fileInfoItems[0].innerHTML = "Name: " + file.name;
-    // fileInfoItems[1].innerHTML = "Size: " + data.size;
-    // fileInfoItems[2].innerHTML = "Type: " + data.type;
-    // fileInfoItems[3].innerHTML = "Last Modified: " + data.lastModified;
+    if (data.success) {
+      // init_grid(data.dir);
+    }
   });
+}
+
+var showFileInfo = function showFileInfoListener(e, file) {
+  if (hideFileInfoListener !== null) {
+    document.removeEventListener("click", hideFileInfoListener);
+    hideFileInfoListener = null;
+  }
+  hideFileInfoListener = hideFileInfo.bind(null, e, file);
+  console.log(file);
+  // Show the file info panel here, populate it with file info
+  const fileInfo = document.getElementById("file-info-modal");
+  const fileInfoItems = fileInfo.querySelectorAll(".file-info-item");
+  fileInfo.classList.remove("hidden");
+  fileInfo.classList.add(file._id);
+  // fileInfo.style.left = e.clientX + "px";
+  // fileInfo.style.top = e.clientY + "px";
+  setTimeout(() => {
+    fileInfo.style.opacity = 1;
+    // fileInfo.style.transform = "scale(1)";
+  }, 100);
+  fileInfoItems[0].innerHTML = file.fileName;
+  // fileInfoItems[1].innerHTML = "Path: " + file.dirPath + "/" + file.fileName;
+  fileInfoItems[2].innerHTML = "Size: " + BytesToSize(file.fileSize);
+  if (file.isDirectory) {
+    fileInfoItems[3].innerHTML = "Type: Folder";
+  } else {
+    fileInfoItems[3].innerHTML = "Type: " + file.fileExt;
+  }
+  fileInfoItems[4].innerHTML = "Last Modified: " + ConvertDate(file.lastModified);
+
+  document.addEventListener("click", hideFileInfoListener);
+};
+
+var hideFileInfo = (e, file) => {
+  console.log(e.target);
+  const fileInfo = document.getElementById("file-info-modal");
+  if (!fileInfo.contains(e.target)) {
+    fileInfo.style.opacity = 0;
+    // fileInfo.style.transform = "scale(0)";
+    setTimeout(function() {
+      fileInfo.classList.remove(file._id);
+      fileInfo.classList.add("hidden");
+    }, 300);
+    document.removeEventListener("click", hideFileInfoListener);
+    hideFileInfoListener = null;
+  }
 }
 
 var favouriteFile = (e, file) => {
   fetch ("/togglefavourite?fileId=" + file._id).then((res) => {
     return res.json();
   }).then((data) => {
-    console.log( data.isFavourited);
+    console.log(data.isFavourited);
   });
-}
+};
 
 var renameFile = (e, file) => {
-  fetch ("/file-rename?fileId=" + file._id).then((res) => {
-    return res.text();
-  }).then((data) => {
-    console.log(data);
-  });
+  const fileElement = document.getElementsByClassName(file._id)[0];
+  const fileName = fileElement.getElementsByClassName("grid-filename")[0];
+  const editFileInputField = document.getElementById("edit-filename");
+
+  editFileInputField.value = fileName.innerHTML;
+  editFileInputField.style.display = "block";
+  editFileInputField.style.left = fileName.offsetLeft + "px";
+  editFileInputField.style.top = fileName.offsetTop + "px";
+  editFileInputField.style.width = fileName.offsetWidth + "px";
+  editFileInputField.focus();
+
+
+  var hideInputField = (e) => {
+    const renameItem = document.getElementById("rename-file");
+    if (e.target !== editFileInputField && e.target !== fileName && e.target !== renameItem) {
+      editFileInputField.style.display = "none";
+      console.log("clicked outside!");
+      editFileInputField.removeEventListener("keydown", keyEnterEvent);
+      window.removeEventListener("click", hideInputField);
+    }
+  };
+
+  var keyEnterEvent = (e) => {
+    if (e.key === "Enter") {
+      fileName.innerHTML = editFileInputField.value;
+      editFileInputField.style.display = "none";
+
+      const params = new URLSearchParams({
+        fileId: file._id,
+        newName: editFileInputField.value
+      });
+
+      fetch ("/file-rename?" + params).then((res) => {
+        return res.text();
+      }).then((data) => {
+        console.log(data);
+      });
+      editFileInputField.removeEventListener("keydown", keyEnterEvent);
+      window.removeEventListener("click", hideInputField);
+    }
+  };
+
+  editFileInputField.addEventListener("keydown", keyEnterEvent);
+
+  window.addEventListener("click", hideInputField);
 }
 
 var showContextMenu = function showContextMenuListener (e, file) {
@@ -280,6 +425,18 @@ var showContextMenu = function showContextMenuListener (e, file) {
     showFileInfoListener = null;
   }
   showFileInfoListener = showFileInfo.bind(null, e, file);
+
+  if (renameFileListener != null) {
+    document.getElementById("rename-file").removeEventListener("click", renameFileListener);
+    renameFileListener = null;
+  }
+  renameFileListener = renameFile.bind(null, e, file);
+
+  if (deleteFileListener != null) {
+    document.getElementById("delete-file").removeEventListener("click", deleteFileListener);
+    deleteFileListener = null;
+  }
+  deleteFileListener = deleteFile.bind(null, e, file);
 
   if (favouriteFileListener != null) {
     document.getElementById("favourite-file").removeEventListener("click", favouriteFileListener);
@@ -325,34 +482,108 @@ var showContextMenu = function showContextMenuListener (e, file) {
 
   document.getElementById("favourite-file").addEventListener("click", favouriteFileListener);
 
+  document.getElementById("rename-file").addEventListener("click", renameFileListener);
+
+  document.getElementById("delete-file").addEventListener("click", deleteFileListener);
+
   document.addEventListener("click", hideContextMenuListener);
 }
 
-var showFileInfo = function showFileInfoListener(e, file) {
-  // Show the file info panel here, populate it with file info
-  console.log(file);
-}
-
-var uploadFile = () => {
+var uploadListener = () => {
   const input = document.createElement("input");
   input.type = "file";
 
   input.onchange = e => {
     const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append("file", file);
-    fetch("/upload", {
-      method: "POST",
-      body: formData
-    }).then((res) => {
-      console.log(res);
-    }).catch((err) => {
-      console.log(err);
-    });
+    uploadFile(file);
   }
   input.click();
 }
 
-document.getElementById("upload-btn").addEventListener("click", uploadFile);
+var uploadFile = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  fetch("/upload", {
+    method: "POST",
+    body: formData
+  }).then((res) => {
+    console.log(res);
+  }).catch((err) => {
+    console.log(err);
+  });
+}
 
-window.onload = init_grid("");
+
+const dropZone = document.getElementById("drop-zone");
+
+  // Prevent default drag behaviors
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+  dropZone.addEventListener(eventName, e => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, false);
+});
+
+// Highlight drop zone when item is dragged over
+['dragenter', 'dragover'].forEach(eventName => {
+  dropZone.addEventListener(eventName, e => {
+    dropZone.classList.add('dragover');
+  }, false);
+});
+
+// Unhighlight drop zone when item is dragged away
+['dragleave', 'drop'].forEach(eventName => {
+  dropZone.addEventListener(eventName, e => {
+    dropZone.classList.remove('dragover');
+  }, false);
+});
+
+// Handle dropped files
+dropZone.addEventListener('drop', e => {
+  const file = e.dataTransfer.files[0];
+  uploadFile(file);
+});
+
+document.getElementById("upload-btn").addEventListener("click", uploadListener);
+
+document.addEventListener('DOMContentLoaded', function () {
+  const sidebarToggle = document.getElementById('menu-btn');
+  const sidebar = document.getElementById('sidebar');
+
+  function checkWindowWidth() {
+    if (window.innerWidth >= 1250) {
+      sidebar.classList.add('open');
+      sidebarToggle.classList.add('open');
+    } else {
+      sidebar.classList.remove('open');
+      sidebarToggle.classList.remove('open');
+    }
+  }
+
+  sidebarToggle.addEventListener('click', function () {
+    sidebar.classList.toggle('open');
+    sidebarToggle.classList.toggle('open');
+  });
+
+  // Check window width on load
+  checkWindowWidth();
+
+  // Check window width on resize
+  window.addEventListener('resize', checkWindowWidth);
+});
+
+
+
+var getCurrentDir = async () => {
+  const result = await fetch("/get-currdir").then((res) => res.text()).then((data) => data);
+  return result;
+}
+
+
+// Initialise the grid on page load
+window.onload = async () => {
+  await getCurrentDir().then((data) => {
+    init_grid(data);
+    init_favourite_list();
+  });
+};

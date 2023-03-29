@@ -3,6 +3,10 @@
     Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
 }
 
+main {
+  padding-top: 80px;
+}
+
 .btn {
   border-radius: 6px;
 }
@@ -17,19 +21,113 @@
 }
 
 .header-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background-color: #f8f8f8;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 1em;
-  /* height: 100%; */
+  justify-content: center;
+  z-index: 1000;
+}
+
+.menu-btn {
+  display: flex;
+  margin-left: 15px;
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.15s, filter 0.15s, rotate 0.15s;
+}
+
+.menu-btn:hover {
+  cursor: pointer;
+  transform: scale(1.05);
+  filter: brightness(90%);
+}
+
+.menu-btn.open {
+  transform: rotate(90deg);
 }
 
 .back-btn {
   display: flex;
+  margin-left: 10px;
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.back-btn:hover {
+  cursor: pointer;
+  transform: scale(1.1);
+  filter: brightness(90%);
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 250px;
+  background-color: #f8f8f8;
+  box-shadow: 2px 2px 4px 2px rgba(0, 0, 0, 0.1);
+  overflow: auto;
+  padding: 1rem;
+  transition: transform 0.2s ease-in-out;
+  transform: translateX(-100%);
+  z-index: 999;
+}
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-content {
+  /* text-align: center; */
+  padding-top: 80px;
+}
+
+.sidebar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-bottom: 2px solid #b3b3b3;
+}
+
+.sidebar-item {
+  padding: 10px;
+  transition: background-color 0.3s ease-out;
+}
+
+.sidebar-item:hover {
+  background-color: #cfcfcf;
+  cursor: pointer;
+}
+
+.upload-btn {
+  display: flex;
+  float: right;
+  margin-right: 25px;
+  background-color: #2592ff;
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.15s, filter 0.15s;
+  border-radius: 50%;
+}
+
+.upload-btn:hover {
+  cursor: pointer;
+  transform: scale(1.1);
+  filter: brightness(90%);
 }
 
 #directory-wrapper {
-  /* display: flex; */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   flex: 1;
   /* align-items: center; */
@@ -48,6 +146,14 @@
   padding: 20px 4px;
 }
 
+#grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 20px;
+}
+
 /* Create four equal columns that sits next to each other */
 .column {
   flex: 25%;
@@ -55,8 +161,17 @@
   padding: 0 4px;
 }
 
+.col {
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.2s, filter 0.2s;
+}
+
 .col:hover {
   cursor: pointer;
+  transform: scale(1.05);
+  filter: brightness(90%);
+  /* transition: transform 0.15s, filter 0.15s; */
 }
 
 .column img {
@@ -69,21 +184,47 @@
   font-size: 11px;
 }
 
+.grid-filename {
+  cursor: pointer;
+}
+
+.grid-filename:input {
+  display: none;
+
+}
+
+.edit-input {
+  display: none;
+  position: absolute;
+  z-index: 1;
+}
+
+@media (min-width: 1250px) {
+  .sidebar {
+    transform: translateX(0);
+  }
+
+  .menu-btn {
+    transform: rotate(90deg);
+  }
+}
+
+
 /* Responsive layout - makes a two column-layout instead of four columns */
-@media screen and (max-width: 800px) {
+/* @media screen and (max-width: 800px) {
   .column {
     flex: 50%;
     max-width: 50%;
   }
-}
+} */
 
 /* Responsive layout - makes the two columns stack on top of each other instead of next to each other */
-@media screen and (max-width: 600px) {
+/* @media screen and (max-width: 600px) {
   .column {
     flex: 100%;
     max-width: 100%;
   }
-}
+} */
 
 .hidden {
   display: none;
@@ -100,7 +241,7 @@
   z-index: 1;
   opacity: 0;
   transform: scale(0);
-  transition: all 0.3s ease-out;
+  transition: all 0.2s ease-out;
 }
 
 .context-menu-item {
@@ -111,4 +252,18 @@
 .context-menu-item:hover {
   background-color: #0080ff;
   cursor: pointer;
+}
+
+#file-info-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  list-style: none;
+  width: fit-content;
+  z-index: 1;
+  transition: all 0.15s ease-out;
 }

@@ -5,13 +5,27 @@ function submitForm(event) {
     // Hash the password here using a JavaScript library such as bcrypt
     // or send a request to the server to hash the password and check against the database
     const errorMessage = document.getElementById("errorMessage");
-    if (username === "test" && password === "test") {
-      // Redirect the user to the homepage
-      window.location.href = "homepage.html";
-    } else {
-      errorMessage.innerText = "Incorrect username or password";
-      errorMessage.classList.add('show');
-    }
+
+    // Check if the username and password are correct
+    fetch("/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        "username": username,
+        "password": password
+      })
+    }).then(res => {
+      if (res.status === 200) {
+        // Redirect the user to the homepage
+        window.location.href = "homepage.html";
+      } else {
+        console.log(res);
+        errorMessage.innerText = "Incorrect username or password";
+        errorMessage.classList.add('show');
+      }
+    });
 
     // let errormessage = document.querySelector('.error-message');
 

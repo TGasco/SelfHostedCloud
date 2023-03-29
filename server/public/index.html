@@ -9,21 +9,49 @@
         <title>Self Hosted Cloud</title>
     </head>
     <body>
+        <!-- Header Bar -->
         <div id="header" class="header-bar">
+            <i id="menu-btn" class="menu-btn fa fa-bars fa-2x"></i>
             <i id="back-btn" class="back-btn fa fa-angle-left fa-2x" aria-hidden="true"></i>
             <div id="directory-wrapper">
-                <p id="curr-dir">My Drive</p>
+                <p id="curr-dir"></p>
             </div>
         </div>
+
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar">
+            <div id="sidebar-content" class="sidebar-content">
+                <div id="favourites-container" class="sidebar-container">
+                    <h3>Favourites</h3>
+                    <ul id="favourites-list" class="sidebar-list"></ul>
+                </div>
+                <div id="preferences-container" class="sidebar-container">
+                    <h3>Preferences</h3>
+                    <ul id="preferences-list" class="sidebar-list">
+                        <li id="dark-mode" class="sidebar-item">Dark Mode</li>
+                        <li id="light-mode" class="sidebar-item">Light Mode</li>
+                    </ul>
+                </div>
+                <div id="system-details-container" class="sidebar-container">
+                    <h3>System Details</h3>
+                    <ul id="system-details-list" class="sidebar-list"></ul>
+                </div>
+            </div>
+        </div>
+
         <!-- Main static page elements here -->
-        <div id="grid"></div>
+        <main>
+            <div id="drop-zone">
+                <div id="grid"></div>
+            </div>
+        </main>
 
         <button id="upload-btn" class="upload-btn">
-            <i class="fa fa-upload fa-2x" aria-hidden="true"></i>
+            <i class="fa fa-upload fa-4x" aria-hidden="true"></i>
         </button>
 
         <!-- (Initially) Hidden Components -->
-        <!-- Context menu (Hidden on page load) -->
+        <!-- Context menu (hidden on page load) -->
         <ul id="context-menu" class="hidden">
             <li id="file-info" class="context-menu-item">File info</li>
             <li id="favourite-file" class="context-menu-item">Favourite</li>
@@ -32,6 +60,19 @@
             <li id="delete-file" class="context-menu-item">Delete</li>
         </ul>
 
-        <script src="/js/index.js"></script>
+        <!-- File info (hidden on page load) -->
+        <ul id="file-info-modal" class="hidden">
+            <!-- <span id="close-file-info" class="close">&times;</span> -->
+            <li id="file-info-name" class="file-info-item"></li>
+            <li id="file-info-path" class="file-info-item"></li>
+            <li id="file-info-size" class="file-info-item"></li>
+            <li id="file-info-type" class="file-info-item"></li>
+            <li id="file-info-date" class="file-info-item"></li>
+        </ul>
+
+        <!-- Rename file input field (hidden on page load) -->
+        <input type="text" class="hidden edit-input" id="edit-filename" value="">
+
+        <script type="module" src="/js/index.js"></script>
     </body>
 </html>

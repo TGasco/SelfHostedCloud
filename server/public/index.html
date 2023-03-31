@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="ie=edge">
         <link rel="stylesheet" type="text/css" href="/css/main.css">
-        <script src="https://use.fontawesome.com/4914919097.js"></script>
+        <script src="https://kit.fontawesome.com/46cedce12b.js" crossorigin="anonymous"></script>
         <title>Self Hosted Cloud</title>
     </head>
     <body>
@@ -14,8 +14,9 @@
             <i id="menu-btn" class="menu-btn fa fa-bars fa-2x"></i>
             <i id="back-btn" class="back-btn fa fa-angle-left fa-2x" aria-hidden="true"></i>
             <div id="directory-wrapper">
-                <p id="curr-dir"></p>
+                <h4 id="curr-dir"></h4>
             </div>
+            <i id="user-btn" class="user-btn fa-regular fa-circle-user fa-2x" aria-hidden="true"></i>
         </div>
 
         <!-- Sidebar -->
@@ -34,7 +35,11 @@
                 </div>
                 <div id="system-details-container" class="sidebar-container">
                     <h3>System Details</h3>
-                    <ul id="system-details-list" class="sidebar-list"></ul>
+                    <ul id="system-details-list" class="sidebar-list">
+                        <li id="system-status" class="sidebar-item">Status: Online</li>
+                        <li id="system-uptime" class="sidebar-item">Uptime: </li>
+                        <li id="system-lastsync" class="sidebar-item">Last Sync: </li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -46,9 +51,7 @@
             </div>
         </main>
 
-        <button id="upload-btn" class="upload-btn">
-            <i class="fa fa-upload fa-4x" aria-hidden="true"></i>
-        </button>
+        <button id="upload-btn" class="upload-btn fa-regular fa-cloud-arrow-up fa-3x"></button>
 
         <!-- (Initially) Hidden Components -->
         <!-- Context menu (hidden on page load) -->
@@ -62,17 +65,27 @@
 
         <!-- File info (hidden on page load) -->
         <ul id="file-info-modal" class="hidden">
+            <i id="close-file-info" class="btn-default close fa-solid fa-xmark" style="float: right;" aria-hidden="true"></i>
             <!-- <span id="close-file-info" class="close">&times;</span> -->
-            <li id="file-info-name" class="file-info-item"></li>
+            <li id="file-info-name" class="file-info-item file-info-title"></li>
             <li id="file-info-path" class="file-info-item"></li>
             <li id="file-info-size" class="file-info-item"></li>
             <li id="file-info-type" class="file-info-item"></li>
             <li id="file-info-date" class="file-info-item"></li>
+            <li id="file-info-upload-date" class="file-info-item"></li>
+            <li id="file-info-favourited" class="file-info-item"></li>
         </ul>
 
         <!-- Rename file input field (hidden on page load) -->
         <input type="text" class="hidden edit-input" id="edit-filename" value="">
 
+        <div id="delete-confirm" class="hidden">
+            <i id="close-delete-confirm" class="btn-default close fa-solid fa-xmark" style="float: right;" aria-hidden="true"></i>
+            <h3>Are you sure you want to delete this file?</h3>
+            <button id="delete-confirm-btn" class="btn-default">Delete</button>
+            <button id="delete-cancel-btn" class="btn-default">Cancel</button>
+
+        <!-- Load Script -->
         <script type="module" src="/js/index.js"></script>
     </body>
 </html>

@@ -3,118 +3,195 @@ import { BytesToSize, ConvertDate } from './helperfuncs.js';
 var currDir = "";
 
 async function init_grid(path) {
-  const grid = document.getElementById("grid"); // Get the grid element
-  grid.innerHTML = ""; // Clear the grid
-  fetch("/metadata?path=" + path).then((res) => res.json()).then(async (files) => {
-    const currDirElement = document.getElementById("curr-dir");
-    currDirElement.innerHTML = path;
-    const gridSize = Math.ceil(files.length / 4);
-    const lastRow = files.length % 4;
-    for (let i = 0; i < gridSize; i++) {
-      const rowDiv = document.createElement("div");
-      rowDiv.id = "row-" + i;
-      rowDiv.className = "row";
-      grid.appendChild(rowDiv);
-      if (i < gridSize && gridSize > 1) {
-        var rowLength = 4;
-      } else {
-        var rowLength = lastRow;
-      }
-      for (let j = 0; j < rowLength; j++) {
-        const fIndex = i * 4 + j; // Associated file index
-        const colDiv = document.createElement("div");
-        colDiv.id = "col-" + i + "-" + j;
-        colDiv.className = "col " + files[fIndex]._id;
+  const oldGrid = document.getElementById("grid");
+  oldGrid.className = "grid-container";
 
-        // Add the contextmenu event listener
-        colDiv.addEventListener("contextmenu", (e) => {
-          showContextMenu(e, files[fIndex]);
-        });
+  // Create a temporary grid element
+  const newGrid = document.createElement("div");
+  newGrid.id = "grid";
+  newGrid.className = "grid-container";
 
-        if (files[fIndex].isDirectory) {
-          colDiv.addEventListener("click", (e) => {
-            e.preventDefault();
-            init_grid(path + "/" + files[fIndex].fileName);
-          });
-        } else {
-          colDiv.addEventListener("click", (e) => {
-            e.preventDefault();
-          });
-        }
-        rowDiv.appendChild(colDiv);
-        const img = document.createElement("img");
-        img.id = "img-" + i + "-" + j;
-        img.className = "grid-img";
-        img.src = GetFileIcon(files[i * 4 + j]);
-        colDiv.appendChild(img);
+  const currDirElement = document.getElementById("curr-dir");
+  // Change this to the path of the root directory of the cloud drive
+  GetRelativePath(path).then((relativePath) => {
+    currDirElement.textContent = relativePath;
+  });
 
-        const fileName = document.createElement("div");
-        fileName.id = "filename-" + i + "-" + j;
-        fileName.className = "grid-filename";
-        fileName.innerHTML = files[fIndex].fileName;
-        colDiv.appendChild(fileName);
+  // Create a document fragment to hold the grid items
+  const gridFragment = document.createDocumentFragment();
 
-        const editFileInputField = document.getElementById("edit-filename");
-      }
+  try {
+    const filesResponse = await fetch("/metadata?path=" + path, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem("token"),
+      },
+    });
+    const files = await filesResponse.json();
+
+    if (filesResponse.status !== 200) {
+      // redirect to login page
+      console.log("Uh oh, you can't view this content!");
+      window.location.href = "/login";
     }
 
-    // Set the current directory in the server
-    fetch("/currdir", {
+    // Create an array of promises for fetching file icons
+    const iconPromises = files.map((file, i) => {
+      return new Promise(async (resolve) => {
+        const gridItem = document.createElement("div");
+        gridItem.id = file._id;
+        gridItem.className = "grid-item";
+
+        gridItem.addEventListener("contextmenu", (e) => {
+          showContextMenu(e, file);
+        });
+
+        if (file.isDirectory) {
+          gridItem.addEventListener("click", (e) => {
+            e.preventDefault();
+            init_grid(path + "/" + file.fileName);
+          });
+        } else {
+          gridItem.addEventListener("click", (e) => {
+            e.preventDefault();
+            // Open file here
+          });
+        }
+
+        const img = document.createElement("img");
+        img.id = "img-" + i;
+        img.className = "grid-img";
+        img.src = GetFileIcon(file);
+        gridItem.appendChild(img);
+
+        const fileName = document.createElement("div");
+        fileName.id = "filename-" + i;
+        fileName.className = "grid-filename";
+        fileName.textContent = file.fileName;
+        gridItem.appendChild(fileName);
+
+        gridFragment.appendChild(gridItem);
+
+        resolve();
+      });
+    });
+
+    // Wait for all the promises to resolve
+    await Promise.all(iconPromises);
+
+    // Append the document fragment to the new grid
+    newGrid.appendChild(gridFragment);
+
+    // Replace the old grid with the new grid
+    oldGrid.replaceWith(newGrid);
+
+    const currDirResponse = await fetch("/currdir", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem("token"),
       },
-      body: JSON.stringify({currDir: path})
-    }).then((res) => res.json())
-    .then((data) => {
-      // console.log(data.currDir + " is the current directory");
-      currDir = data.currDir;
+      body: JSON.stringify({ currDir: path }),
     });
-  });
-}
-
-async function init_favourite_list() {
-  const favList = document.getElementById("favourites-list");
-  favList.innerHTML = "";
-  const favourites = await GetFavourites();
-  for (let i = 0; i < favourites.length; i++) {
-    const fav = document.createElement("li");
-    fav.className = "sidebar-item";
-    const img = document.createElement("img");
-    img.src = GetFileIcon(favourites[i]);
-    img.style.width = "10%";
-    img.style.height = "10%";
-    img.className = "fav-img";
-    fav.appendChild(img);
-    const text = document.createElement("span");
-    text.innerHTML = favourites[i].fileName;
-    text.className = "fav-text";
-    fav.appendChild(text);
-    fav.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (favourites[i].isDirectory) {
-        var filePath = favourites[i].dirPath + "/" + favourites[i].fileName;
-      } else {
-        var filePath = favourites[i].dirPath;
-      }
-      if (filePath != currDir) {
-        init_grid(filePath);
-      }
-    });
-    favList.appendChild(fav);
+    if (currDirResponse.status!== 200) {
+      // redirect to login page
+      console.log("Uh oh, you can't view this content!");
+      window.location.href = "/login";
+    }
+    const data = await currDirResponse.json();
+    currDir = data.currDir;
+  } catch (error) {
+    console.error("Error fetching metadata or current directory:", error);
   }
 }
 
+async function init_favourite_list() {
+  const oldFavList = document.getElementById("favourites-list");
 
-async function GetRelativePath(path) {
-  return await fetch("/basedir").then((response) => response.json()).then((baseDir) => {
-    return path.replace(baseDir, "My Drive");
-  });
+  // Create a temporary list element
+  const newFavList = document.createElement("ul");
+  newFavList.id = "favourites-list";
+
+  // Create a document fragment to hold the list items
+  const favFragment = document.createDocumentFragment();
+
+  try {
+    const favourites = await GetFavourites();
+    if (favourites.length == 0) {
+      const fav = document.createElement("p");
+      fav.className = "sidebar-item";
+      const text = document.createElement("span");
+      text.textContent = "No favourites yet!";
+      text.className = "fav-text";
+      fav.appendChild(text);
+      favFragment.appendChild(fav);
+    } else {
+      const favPromises = favourites.map((file, i) => {
+        return new Promise(async (resolve) => {
+          const fav = document.createElement("li");
+          fav.className = "sidebar-item fav-item";
+          const img = document.createElement("img");
+          img.src = GetFileIcon(file);
+          img.className = "fav-img";
+          fav.appendChild(img);
+          const text = document.createElement("span");
+          text.textContent = file.fileName;
+          text.className = "fav-text";
+          fav.appendChild(text);
+
+          fav.addEventListener("contextmenu", (e) => {
+            showContextMenu(e, file);
+          });
+
+          fav.addEventListener("click", (e) => {
+            e.preventDefault();
+            const filePath = file.isDirectory
+              ? file.dirPath + "/" + file.fileName
+              : file.dirPath;
+            if (filePath !== currDir) {
+              init_grid(filePath);
+            }
+          });
+
+          favFragment.appendChild(fav);
+          resolve();
+        });
+      });
+
+      // Wait for all the promises to resolve
+      await Promise.all(favPromises);
+    }
+
+    // Append the document fragment to the new list
+    newFavList.appendChild(favFragment);
+
+    // Replace the old list with the new list
+    oldFavList.replaceWith(newFavList);
+  } catch (error) {
+    console.error("Error fetching favourites:", error);
+  }
 }
 
-function GetRelativePath2(path) {
-  // TEMP: Remove this when I get the server to return relative paths
-  return path.replace("My Drive", "");
+async function GetRelativePath(path) {
+  return await fetch("/basedir", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => {
+    if (res.status !== 200) {
+      // redirect to login page
+      console.log("Uh oh, you can't view this content!");
+      window.location.href = "/login";
+    } else {
+      return res.text()
+    }
+  }).then((baseDir) => {
+    const relPath = path.replace(baseDir, "My Cloud");
+    return relPath;
+  });
 }
 
 async function GetPreviousDir(path) {
@@ -127,9 +204,21 @@ async function GetPreviousDir(path) {
 }
 
 async function GetFavourites() {
-  const response = await fetch("/get-favourites");
-  const favourites = await response.json();
-  return favourites;
+  const response = await fetch("/get-favourites", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    }
+  });
+  if (response.status !== 200) {
+    // redirect to login page
+    console.log("Uh oh, you can't view this content!");
+    window.location.href = "/login";
+  } else {
+    const favourites = await response.json();
+    return favourites;
+  }
 }
 
 function GetFileIcon(file) {
@@ -238,7 +327,13 @@ async function getElementClass(element, index=null) {
 // Event Listeners
 document.getElementById("back-btn").addEventListener("click", async () => {
   await getCurrentDir().then((currDir) => {
-    fetch("/basedir").then((response) => response.text()).then((baseDir) => {
+    fetch("/basedir", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      }
+    }).then((response) => response.text()).then((baseDir) => {
       if (currDir === baseDir) {
       } else {
         GetPreviousDir(currDir).then((prevDir) => {
@@ -284,44 +379,82 @@ var hideContextMenu = (e, file) => {
 };
 
 var downloadFile = (e, file) => {
-  var win = window.open("/download?fileId=" + file._id);
-  setTimeout(() => {
-    if (!win.closed) {
-      win.close();
-    }
-  }, 2500);
-}
+  const token = localStorage.getItem('token'); // Get the JWT token from localStorage
 
-var deleteFile = (e, file) => {
-  fetch("/file-delete?fileId=" + file._id).then((res) => {
-    return res.text();
-  }).then((data) => {
-    if (data.success) {
-      // init_grid(data.dir);
+  fetch(`/download?fileId=${file._id}`, {
+    headers: {
+      'Authorization': `Bearer ${token}` // Send the JWT token in the Authorization header
     }
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('Network response was not ok');
+    }
+    return response.blob(); // Return the blob data from the response
+  })
+  .then(blob => {
+    // Create a URL for the blob data
+    const url = window.URL.createObjectURL(blob);
+
+    // Create a link and click it to download the file
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${file.fileName}${file.fileExt}`);
+    document.body.appendChild(link);
+    link.click();
+  })
+  .catch(error => {
+    console.error('There was a problem with the fetch operation:', error);
   });
 }
 
+
+var deleteFile = (e, file) => {
+  fetch("/file-delete?fileId=" + file._id, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => res.text()).then((data) => {
+      init_grid(currDir);
+  });
+}
+
+var showDeleteConfirm = (e, file) => {
+  e.preventDefault();
+  if (hideDeleteConfirmListener != null) {
+    document.removeEventListener("click", hideDeleteConfirmListener);
+    hideDeleteConfirmListener = null;
+  }
+  // Show the delete confirmation panel here, populate it with file info
+  const deleteConfirmation = document.getElementById("delete-confirm");
+  deleteConfirmation.classList.remove("hidden");
+  deleteConfirmation.classList.add(file._id);
+  setTimeout(() => {
+    deleteConfirmation.style.opacity = 1;
+  }, 100);
+
+  hideDeleteConfirmListener = hideDeleteConfirm.bind(null, e, file);
+  const closeConfirmation = document.getElementById("close-delete-confirm");
+  closeConfirmation.addEventListener("click", hideDeleteConfirmListener);
+}
+
 var showFileInfo = function showFileInfoListener(e, file) {
-  if (hideFileInfoListener !== null) {
+  e.preventDefault();
+  if (hideFileInfoListener != null) {
     document.removeEventListener("click", hideFileInfoListener);
     hideFileInfoListener = null;
   }
-  hideFileInfoListener = hideFileInfo.bind(null, e, file);
-  console.log(file);
   // Show the file info panel here, populate it with file info
   const fileInfo = document.getElementById("file-info-modal");
   const fileInfoItems = fileInfo.querySelectorAll(".file-info-item");
   fileInfo.classList.remove("hidden");
   fileInfo.classList.add(file._id);
-  // fileInfo.style.left = e.clientX + "px";
-  // fileInfo.style.top = e.clientY + "px";
   setTimeout(() => {
     fileInfo.style.opacity = 1;
-    // fileInfo.style.transform = "scale(1)";
   }, 100);
   fileInfoItems[0].innerHTML = file.fileName;
-  // fileInfoItems[1].innerHTML = "Path: " + file.dirPath + "/" + file.fileName;
   fileInfoItems[2].innerHTML = "Size: " + BytesToSize(file.fileSize);
   if (file.isDirectory) {
     fileInfoItems[3].innerHTML = "Type: Folder";
@@ -329,44 +462,55 @@ var showFileInfo = function showFileInfoListener(e, file) {
     fileInfoItems[3].innerHTML = "Type: " + file.fileExt;
   }
   fileInfoItems[4].innerHTML = "Last Modified: " + ConvertDate(file.lastModified);
+  fileInfoItems[5].innerHTML = "Uploaded: " + ConvertDate(file.uploadDate);
+  fileInfoItems[6].innerHTML = "Favourite: " + file.isFavourited;
 
-  document.addEventListener("click", hideFileInfoListener);
+  hideFileInfoListener = hideFileInfo.bind(null, e, file);
+  const closeInfo = document.getElementById("close-file-info");
+  closeInfo.addEventListener("click", hideFileInfoListener);
 };
 
 var hideFileInfo = (e, file) => {
-  console.log(e.target);
   const fileInfo = document.getElementById("file-info-modal");
-  if (!fileInfo.contains(e.target)) {
-    fileInfo.style.opacity = 0;
-    // fileInfo.style.transform = "scale(0)";
-    setTimeout(function() {
-      fileInfo.classList.remove(file._id);
-      fileInfo.classList.add("hidden");
-    }, 300);
-    document.removeEventListener("click", hideFileInfoListener);
-    hideFileInfoListener = null;
-  }
+  fileInfo.style.opacity = 0;
+  setTimeout(function() {
+    fileInfo.classList.remove(file._id);
+    fileInfo.classList.add("hidden");
+  }, 250);
+  document.removeEventListener("click", hideFileInfoListener);
+  hideFileInfoListener = null;
 }
 
 var favouriteFile = (e, file) => {
-  fetch ("/togglefavourite?fileId=" + file._id).then((res) => {
+  fetch ("/togglefavourite?fileId=" + file._id, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => {
     return res.json();
   }).then((data) => {
     console.log(data.isFavourited);
+    init_favourite_list();
   });
 };
 
 var renameFile = (e, file) => {
-  const fileElement = document.getElementsByClassName(file._id)[0];
+  const fileElement = document.getElementById(file._id);
   const fileName = fileElement.getElementsByClassName("grid-filename")[0];
   const editFileInputField = document.getElementById("edit-filename");
 
   editFileInputField.value = fileName.innerHTML;
   editFileInputField.style.display = "block";
-  editFileInputField.style.left = fileName.offsetLeft + "px";
-  editFileInputField.style.top = fileName.offsetTop + "px";
-  editFileInputField.style.width = fileName.offsetWidth + "px";
+  editFileInputField.style.left = fileName.offsetParent.offsetLeft + fileName.offsetLeft + "px";
+  editFileInputField.style.top = fileName.offsetParent.offsetTop + fileName.offsetTop + "px";
+
+  editFileInputField.style.width = fileName.offsetParent.offsetWidth + "px";
+  // editFileInputField.style.width = width + "px";
   editFileInputField.focus();
+  editFileInputField.select();
+
 
 
   var hideInputField = (e) => {
@@ -389,7 +533,13 @@ var renameFile = (e, file) => {
         newName: editFileInputField.value
       });
 
-      fetch ("/file-rename?" + params).then((res) => {
+      fetch ("/file-rename?" + params, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + localStorage.getItem("token"),
+        }
+      }).then((res) => {
         return res.text();
       }).then((data) => {
         console.log(data);
@@ -444,7 +594,13 @@ var showContextMenu = function showContextMenuListener (e, file) {
   }
   favouriteFileListener = favouriteFile.bind(null, e, file);
   const favouriteItem = document.getElementById("favourite-file");
-  fetch ("/isfavourited?fileId=" + file._id).then((res) => {
+  fetch ("/isfavourited?fileId=" + file._id, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => {
     return res.json();
   }).then((data) => {
     if (data.isFavourited) {
@@ -505,9 +661,14 @@ var uploadFile = (file) => {
   formData.append("file", file);
   fetch("/upload", {
     method: "POST",
+    headers: {
+      // "Content-Type": "multipart/form-data",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    },
     body: formData
   }).then((res) => {
     console.log(res);
+    init_grid(currDir);
   }).catch((err) => {
     console.log(err);
   });
@@ -516,7 +677,7 @@ var uploadFile = (file) => {
 
 const dropZone = document.getElementById("drop-zone");
 
-  // Prevent default drag behaviors
+// Prevent default drag behaviors
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
   dropZone.addEventListener(eventName, e => {
     e.preventDefault();
@@ -575,7 +736,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 var getCurrentDir = async () => {
-  const result = await fetch("/get-currdir").then((res) => res.text()).then((data) => data);
+  const result = await fetch("/get-currdir", {
+    method: "GET",
+    headers: {
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => res.text()).then((data) => data);
   return result;
 }
 

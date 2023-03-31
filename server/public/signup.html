@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link rel="stylesheet" type="text/css" href="/css/login.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
+  <body>
+    <div class="container">
+      <form onsubmit="return signUp(event)">
+        <h2>Sign Up</h2>
+        <div class="input-field">
+          <input type="text" id="username" placeholder="Username" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+        </div>
+        <div class="input-field">
+          <input type="password" id="password" placeholder="Password" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+        </div>
+        <div class="input-field">
+          <input type="text" id="basedir" placeholder="/Users/username/SelfHostedCloudDrive" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+        </div>
+        <div class="error-message" id="errorMessage"></div>
+        <button type="submit" onmousedown="pressButton(this)" onmouseup="releaseButton(this)">Complete Sign Up</button>
+      </form>
+    </div>
+    <script src="/js/login.js"></script>
+  </body>
+</html>

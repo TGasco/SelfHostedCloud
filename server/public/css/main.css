@@ -34,6 +34,18 @@ main {
   z-index: 1000;
 }
 
+.btn-default {
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.btn-default:hover {
+  cursor: pointer;
+  transform: scale(1.05);
+  filter: brightness(0.9);
+}
+
 .menu-btn {
   display: flex;
   margin-left: 15px;
@@ -54,7 +66,7 @@ main {
 
 .back-btn {
   display: flex;
-  margin-left: 10px;
+  margin-left: 20px;
   transform: scale(1);
   filter: brightness(100%);
   transition: transform 0.15s, filter 0.15s;
@@ -63,6 +75,20 @@ main {
 .back-btn:hover {
   cursor: pointer;
   transform: scale(1.1);
+  filter: brightness(90%);
+}
+
+.user-btn {
+  display: flex;
+  margin-right: 20px;
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.15s, filter 0.15s;
+}
+
+.user-btn:hover {
+  cursor: pointer;
+  transform: scale(1.05);
   filter: brightness(90%);
 }
 
@@ -86,8 +112,7 @@ main {
 }
 
 .sidebar-content {
-  /* text-align: center; */
-  padding-top: 80px;
+  padding-top: 60px;
 }
 
 .sidebar-list {
@@ -98,24 +123,36 @@ main {
 }
 
 .sidebar-item {
+  display: flex;
+  align-items: center;
   padding: 10px;
   transition: background-color 0.3s ease-out;
+  user-select: none;
 }
 
-.sidebar-item:hover {
+.sidebar-item.fav-item:hover {
   background-color: #cfcfcf;
   cursor: pointer;
+}
+
+.fav-img {
+  width: 10%;
+  height: 10%;
+  padding-right: 20px;
 }
 
 .upload-btn {
   display: flex;
   float: right;
+  width: 80px;
+  height: 80px;
+  border: none;
+  border-radius: 70%;
   margin-right: 25px;
-  background-color: #2592ff;
+  background-color: #00B6FF;
   transform: scale(1);
   filter: brightness(100%);
   transition: transform 0.15s, filter 0.15s;
-  border-radius: 50%;
 }
 
 .upload-btn:hover {
@@ -124,57 +161,29 @@ main {
   filter: brightness(90%);
 }
 
+#drop-zone {
+  display: hidden;
+  border: none;
+  border-radius: 20px;
+  margin: 0 auto;
+  transition: background-color 0.2s ease-out;
+}
+
+#drop-zone.dragover {
+  border: 2px dashed #00bfffe4;
+  background-color: #00bfff4e;
+  cursor: pointer;
+}
+
 #directory-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   flex: 1;
-  /* align-items: center; */
-  /* display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px; */
 }
 
-.row {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  flex-wrap: wrap;
-  padding: 20px 4px;
-}
-
-#grid {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  padding: 20px;
-}
-
-/* Create four equal columns that sits next to each other */
-.column {
-  flex: 25%;
-  max-width: 25%;
-  padding: 0 4px;
-}
-
-.col {
-  transform: scale(1);
-  filter: brightness(100%);
-  transition: transform 0.2s, filter 0.2s;
-}
-
-.col:hover {
-  cursor: pointer;
-  transform: scale(1.05);
-  filter: brightness(90%);
-  /* transition: transform 0.15s, filter 0.15s; */
-}
-
-.column img {
+/* .column img {
   margin-top: 8px;
   vertical-align: middle;
   width: 100%;
@@ -186,17 +195,27 @@ main {
 
 .grid-filename {
   cursor: pointer;
-}
+} */
 
 .grid-filename:input {
   display: none;
-
 }
 
 .edit-input {
-  display: none;
   position: absolute;
   z-index: 1;
+  outline: none;
+  text-align: center;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  outline: none;
+  transition: border-color 0.2s ease-out;
+  user-select: auto;
+}
+
+.edit-input:focus {
+  border-color: #606baf;
 }
 
 @media (min-width: 1250px) {
@@ -209,22 +228,42 @@ main {
   }
 }
 
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  width: 75%;
+  max-width: 1000px;
+  margin: 0 auto;
+  grid-gap: 25px;
+  padding-top: 60px;
+}
 
-/* Responsive layout - makes a two column-layout instead of four columns */
-/* @media screen and (max-width: 800px) {
-  .column {
-    flex: 50%;
-    max-width: 50%;
+@media (max-width: 1200px) {
+  .grid-container {
+    grid-template-columns: repeat(4, 1fr);
   }
-} */
+}
 
-/* Responsive layout - makes the two columns stack on top of each other instead of next to each other */
-/* @media screen and (max-width: 600px) {
-  .column {
-    flex: 100%;
-    max-width: 100%;
+@media (max-width: 800px) {
+  .grid-container {
+    grid-template-columns: repeat(2, 1fr);
   }
-} */
+}
+
+.grid-item {
+  transform: scale(1);
+  filter: brightness(100%);
+  justify-content: center;
+  text-align: center;
+  transition: transform 0.2s, filter 0.2s;
+  user-select: none;
+}
+
+.grid-item:hover {
+  cursor: pointer;
+  transform: scale(1.05);
+  filter: brightness(90%);
+}
 
 .hidden {
   display: none;
@@ -238,7 +277,7 @@ main {
   list-style: none;
   padding: 0;
   margin: 0;
-  z-index: 1;
+  z-index: 1000;
   opacity: 0;
   transform: scale(0);
   transition: all 0.2s ease-out;
@@ -247,6 +286,7 @@ main {
 .context-menu-item {
   padding: 10px 20px;
   transition: background-color 0.3s ease-out;
+  user-select: none;
 }
 
 .context-menu-item:hover {
@@ -264,6 +304,21 @@ main {
   border-radius: 5px;
   list-style: none;
   width: fit-content;
-  z-index: 1;
-  transition: all 0.15s ease-out;
+  padding: 15px;
+  z-index: 1000;
+  transition: all 0.2s ease-out;
+  box-shadow: 0 2px 4px 0 rgba(0, 0.1, 0, 0.1);
+}
+
+.file-info-title {
+  font-weight: bold;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ccc;
+  align-self: center;
+}
+
+.file-info-item {
+  padding-bottom: 5px;
+  user-select: none;
 }

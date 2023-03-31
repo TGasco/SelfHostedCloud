@@ -2,7 +2,7 @@ import os from 'os';
 import { stat as _stat } from 'fs';
 import { join } from 'path';
 import { GetDocumentById, InsertDocument, QueryCollection } from './dbops.js';
-import { hashPassword } from './crypt.js';
+import { hashPassword, isValidInput } from './crypt.js';
 
 const collectionName = "userCredentials";
 const userId = "63e6d759ecbacadf9cc52f25";
@@ -11,16 +11,20 @@ const userId = "63e6d759ecbacadf9cc52f25";
 const homedir = os.homedir();
 const baseDir = join(homedir, "SelfHostedCloudDrive");
 
-async function NewUser(userName, userPass, userDefaults=null) {
+async function NewUser(userName, userPass, basedir=null, userDefaults=null) {
   var user;
   const hashedPass = await hashPassword(userPass);
-  console.log(hashedPass);
+  // console.log(hashedPass);
+  basedir = null;
+  if (basedir == null) {
+    basedir = baseDir;
+  }
   userPass = null;
   if (userDefaults == null) {
     user = {
       userName: userName,
       userPass: hashedPass,
-      userDefaults: { baseDir: baseDir }
+      userDefaults: { baseDir: basedir }
     };
   } else {
     user = {
@@ -31,8 +35,7 @@ async function NewUser(userName, userPass, userDefaults=null) {
   }
 
   try {
-    // return InsertDocument(user, collectionName);
-    return
+    return InsertDocument(user, collectionName);
   } catch (err) {
     console.log(err);
   }

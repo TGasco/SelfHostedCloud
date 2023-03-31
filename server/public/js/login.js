@@ -2,8 +2,7 @@ function submitForm(event) {
     event.preventDefault();
     const username = document.getElementById("username").value;
     const password = document.getElementById("password").value;
-    // Hash the password here using a JavaScript library such as bcrypt
-    // or send a request to the server to hash the password and check against the database
+
     const errorMessage = document.getElementById("errorMessage");
 
     // Check if the username and password are correct
@@ -16,26 +15,76 @@ function submitForm(event) {
         "username": username,
         "password": password
       })
-    }).then(res => {
+    })
+    .then(res => {
       if (res.status === 200) {
-        // Redirect the user to the homepage
-        window.location.href = "homepage.html";
+        res.json().then(data => {
+          // Save the token, e.g., in the local storage
+          localStorage.setItem("token", data.token);
+          // Redirect the user to the homepage
+        });
       } else {
         console.log(res);
         errorMessage.innerText = "Incorrect username or password";
         errorMessage.classList.add('show');
+        return;
+      }
+      redirectToHomepage();
+    });
+  }
+
+  function redirectToHomepage() {
+    fetch('/myDrive', {
+      method: 'GET',
+      redirect: 'manual',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      }
+    })
+    .then(response => {
+      if (response.status === 200) {
+        // Redirect the user to the homepage
+        window.location.href = "/";
+        // window.location.href = "/myDrive";
+      } else {
+        // Handle error scenarios
+        console.log("Error:", response.status, response.statusText);
       }
     });
-
-    // let errormessage = document.querySelector('.error-message');
-
-    // // ...
-    // if (loginSuccessful) {
-    //   // redirect to homepage
-    // } else {
-    // }
-
   }
+
+
+function signUp(event) {
+  event.preventDefault();
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
+  const basedir = document.getElementById("basedir").value;
+
+  const errorMessage = document.getElementById("errorMessage");
+
+  // Check if the username and password are correct
+  fetch("/signup", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      "username": username,
+      "password": password,
+      "basedir": basedir
+    })
+  }).then(res => {
+    if (res.status === 201) {
+      // Use server to redirect the user to the homepage
+      window.location.href = "/login";
+    } else {
+      console.log(res);
+      errorMessage.innerText = "Incorrect username or password";
+      errorMessage.classList.add('show');
+    }
+  });
+}
 
   function highlightField(field) {
     field.style.borderColor = "#3f51b5";

@@ -1,7 +1,12 @@
 import { BytesToSize, ConvertDate } from './helperfuncs.js';
 
-var currDir = "";
+// Store the current directory
+let currDir = null;
 
+/**
+ * Initialize the grid view with the files and folders at the given path.
+ * @param {string} path - The path to display in the grid view.
+ */
 async function init_grid(path) {
   const oldGrid = document.getElementById("grid");
   oldGrid.className = "grid-container";
@@ -12,70 +17,25 @@ async function init_grid(path) {
   newGrid.className = "grid-container";
 
   const currDirElement = document.getElementById("curr-dir");
-  // Change this to the path of the root directory of the cloud drive
-  GetRelativePath(path).then((relativePath) => {
-    currDirElement.textContent = relativePath;
-  });
+
+  // Get and display the relative path
+  const relativePath = await GetRelativePath(path);
+  currDirElement.textContent = relativePath;
 
   // Create a document fragment to hold the grid items
   const gridFragment = document.createDocumentFragment();
 
   try {
-    const filesResponse = await fetch("/metadata?path=" + path, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + localStorage.getItem("token"),
-      },
-    });
-    const files = await filesResponse.json();
+    // Fetch the file metadata
+    const files = await fetchFilesMetadata(path);
 
-    if (filesResponse.status !== 200) {
-      // redirect to login page
-      console.log("Uh oh, you can't view this content!");
-      window.location.href = "/login";
+    if (!files) {
+      redirectToLogin();
+      return;
     }
 
-    // Create an array of promises for fetching file icons
-    const iconPromises = files.map((file, i) => {
-      return new Promise(async (resolve) => {
-        const gridItem = document.createElement("div");
-        gridItem.id = file._id;
-        gridItem.className = "grid-item";
-
-        gridItem.addEventListener("contextmenu", (e) => {
-          showContextMenu(e, file);
-        });
-
-        if (file.isDirectory) {
-          gridItem.addEventListener("click", (e) => {
-            e.preventDefault();
-            init_grid(path + "/" + file.fileName);
-          });
-        } else {
-          gridItem.addEventListener("click", (e) => {
-            e.preventDefault();
-            // Open file here
-          });
-        }
-
-        const img = document.createElement("img");
-        img.id = "img-" + i;
-        img.className = "grid-img";
-        img.src = GetFileIcon(file);
-        gridItem.appendChild(img);
-
-        const fileName = document.createElement("div");
-        fileName.id = "filename-" + i;
-        fileName.className = "grid-filename";
-        fileName.textContent = file.fileName;
-        gridItem.appendChild(fileName);
-
-        gridFragment.appendChild(gridItem);
-
-        resolve();
-      });
-    });
+    // Create an array of promises for creating grid items
+    const iconPromises = files.map((file, i) => createGridItem(file, path, i, gridFragment));
 
     // Wait for all the promises to resolve
     await Promise.all(iconPromises);
@@ -86,26 +46,23 @@ async function init_grid(path) {
     // Replace the old grid with the new grid
     oldGrid.replaceWith(newGrid);
 
-    const currDirResponse = await fetch("/currdir", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + localStorage.getItem("token"),
-      },
-      body: JSON.stringify({ currDir: path }),
-    });
-    if (currDirResponse.status!== 200) {
-      // redirect to login page
-      console.log("Uh oh, you can't view this content!");
-      window.location.href = "/login";
+    // Update the current directory on the server
+    const success = await updateCurrentDir(path);
+
+    if (!success) {
+      redirectToLogin();
+      return;
     }
-    const data = await currDirResponse.json();
-    currDir = data.currDir;
+
+    currDir = path;
   } catch (error) {
     console.error("Error fetching metadata or current directory:", error);
   }
 }
 
+/**
+ * Initialize the favourite list view with the user's favourite files and folders.
+ */
 async function init_favourite_list() {
   const oldFavList = document.getElementById("favourites-list");
 
@@ -118,7 +75,9 @@ async function init_favourite_list() {
 
   try {
     const favourites = await GetFavourites();
-    if (favourites.length == 0) {
+
+    if (favourites.length === 0) {
+      // Display a message if there are no favourites
       const fav = document.createElement("p");
       fav.className = "sidebar-item";
       const text = document.createElement("span");
@@ -127,37 +86,8 @@ async function init_favourite_list() {
       fav.appendChild(text);
       favFragment.appendChild(fav);
     } else {
-      const favPromises = favourites.map((file, i) => {
-        return new Promise(async (resolve) => {
-          const fav = document.createElement("li");
-          fav.className = "sidebar-item fav-item";
-          const img = document.createElement("img");
-          img.src = GetFileIcon(file);
-          img.className = "fav-img";
-          fav.appendChild(img);
-          const text = document.createElement("span");
-          text.textContent = file.fileName;
-          text.className = "fav-text";
-          fav.appendChild(text);
-
-          fav.addEventListener("contextmenu", (e) => {
-            showContextMenu(e, file);
-          });
-
-          fav.addEventListener("click", (e) => {
-            e.preventDefault();
-            const filePath = file.isDirectory
-              ? file.dirPath + "/" + file.fileName
-              : file.dirPath;
-            if (filePath !== currDir) {
-              init_grid(filePath);
-            }
-          });
-
-          favFragment.appendChild(fav);
-          resolve();
-        });
-      });
+      // Create an array of promises for creating favourite items
+      const favPromises = favourites.map((file, i) => createFavItem(file, i, favFragment));
 
       // Wait for all the promises to resolve
       await Promise.all(favPromises);
@@ -173,210 +103,360 @@ async function init_favourite_list() {
   }
 }
 
+/**
+ * Get the relative path for the given path, replacing the base directory with "My Cloud".
+ * @param {string} path - The path to get the relative path for.
+ * @returns {Promise<string>} A promise that resolves to the relative path.
+ */
 async function GetRelativePath(path) {
-  return await fetch("/basedir", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
-  }).then((res) => {
-    if (res.status !== 200) {
-      // redirect to login page
-      console.log("Uh oh, you can't view this content!");
-      window.location.href = "/login";
-    } else {
-      return res.text()
-    }
-  }).then((baseDir) => {
+  try {
+    const res = await fetch("/basedir", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    const baseDir = await res.text();
     const relPath = path.replace(baseDir, "My Cloud");
     return relPath;
-  });
-}
-
-async function GetPreviousDir(path) {
-  const splitPath = path.split("/");
-  let newPath = "";
-  for (let i = 0; i < splitPath.length - 1; i++) {
-    newPath += splitPath[i] + "/";
+  } catch (error) {
+    redirectToLogin();
+    throw error;
   }
-  return newPath.slice(0, -1);
 }
 
+/**
+ * Get the parent directory of the given path.
+ * @param {string} path - The path to get the parent directory for.
+ * @returns {string} The parent directory path.
+ */
+function GetPreviousDir(path) {
+  const splitPath = path.split("/");
+  const newPath = splitPath.slice(0, -1).join("/");
+  return newPath;
+}
+
+/**
+ * Get the user's favourite files and folders.
+ * @returns {Promise<Array>} A promise that resolves to an array of favourite files and folders.
+ */
 async function GetFavourites() {
-  const response = await fetch("/get-favourites", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
+  try {
+    const response = await fetch("/get-favourites", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    if (response.status !== 200) {
+      redirectToLogin();
+      return [];
     }
-  });
-  if (response.status !== 200) {
-    // redirect to login page
-    console.log("Uh oh, you can't view this content!");
-    window.location.href = "/login";
-  } else {
+
     const favourites = await response.json();
     return favourites;
+  } catch (error) {
+    console.error("Error fetching favourites:", error);
+    return [];
   }
+}
+
+/**
+ * Fetch the file metadata for the given path.
+ * @param {string} path - The path to fetch metadata for.
+ * @returns {Promise<Array|null>} A promise that resolves to an array of files, or null if an error occurs.
+ */
+async function fetchFilesMetadata(path) {
+  try {
+    const filesResponse = await fetch("/metadata?path=" + path, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    if (filesResponse.status !== 200) {
+      return null;
+    }
+
+    const files = await filesResponse.json();
+    return files;
+  } catch (error) {
+    console.error("Error fetching files metadata:", error);
+    return null;
+  }
+}
+
+/**
+ * Update the current directory on the server.
+ * @param {string} path - The path to set as the current directory.
+ * @returns {Promise<boolean>} A promise that resolves to true if the update was successful, or false if an error occurs.
+ */
+async function updateCurrentDir(path) {
+  try {
+    const currDirResponse = await fetch("/currdir", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+      body: JSON.stringify({ currDir: path }),
+    });
+
+    if (currDirResponse.status !== 200) {
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error updating current directory:", error);
+    return false;
+  }
+}
+
+/**
+ * Redirect the user to the login page.
+ */
+function redirectToLogin() {
+  console.log("Uh oh, you can't view this content!");
+  window.location.href = "/login";
+}
+
+// Additional helper functions for creating grid items and favourite items were omitted in the previous response.
+// Add these functions to complete the refactoring.
+
+/**
+ * Create a grid item for the given file, and append it to the given document fragment.
+ * @param {Object} file - The file metadata.
+ * @param {string} path - The path of the file.
+ * @param {number} i - The index of the file in the grid.
+ * @param {DocumentFragment} gridFragment - The document fragment to append the grid item to.
+ * @returns {Promise} A promise that resolves
+ *  * when the grid item has been created and appended to the document fragment.
+ */
+function createGridItem(file, path, i, gridFragment) {
+  return new Promise(async (resolve) => {
+    const gridItem = document.createElement("div");
+    gridItem.id = file._id;
+    gridItem.className = "grid-item";
+
+    gridItem.addEventListener("contextmenu", (e) => {
+      showContextMenu(e, file);
+    });
+
+    if (file.isDirectory) {
+      gridItem.addEventListener("click", (e) => {
+        e.preventDefault();
+        init_grid(path + "/" + file.fileName);
+      });
+    } else {
+      gridItem.addEventListener("click", (e) => {
+        e.preventDefault();
+        // Open file here
+      });
+    }
+
+    const img = document.createElement("img");
+    img.id = "img-" + i;
+    img.className = "grid-img";
+    img.src = GetFileIcon(file);
+    gridItem.appendChild(img);
+
+    const fileName = document.createElement("div");
+    fileName.id = "filename-" + i;
+    fileName.className = "grid-filename";
+    fileName.textContent = file.fileName;
+    gridItem.appendChild(fileName);
+
+    gridFragment.appendChild(gridItem);
+
+    resolve();
+  });
+}
+
+/**
+ * Create a favourite item for the given file, and append it to the given document fragment.
+ * @param {Object} file - The file metadata.
+ * @param {number} i - The index of the file in the favourites list.
+ * @param {DocumentFragment} favFragment - The document fragment to append the favourite item to.
+ * @returns {Promise} A promise that resolves when the favourite item has been created and appended to the document fragment.
+ */
+function createFavItem(file, i, favFragment) {
+  return new Promise(async (resolve) => {
+    const fav = document.createElement("li");
+    fav.className = "sidebar-item fav-item";
+
+    const img = document.createElement("img");
+    img.src = GetFileIcon(file);
+    img.className = "fav-img";
+    fav.appendChild(img);
+
+    const text = document.createElement("span");
+    text.textContent = file.fileName;
+    text.className = "fav-text";
+    fav.appendChild(text);
+
+    fav.addEventListener("contextmenu", (e) => {
+      showContextMenu(e, file);
+    });
+
+    fav.addEventListener("click", (e) => {
+      e.preventDefault();
+      const filePath = file.isDirectory ? file.dirPath + "/" + file.fileName : file.dirPath;
+      if (filePath !== currDir) {
+        init_grid(filePath);
+      }
+    });
+
+    favFragment.appendChild(fav);
+    resolve();
+  });
 }
 
 function GetFileIcon(file) {
   if (file.isDirectory) {
     return "/images/filetypes/folder.png";
   } else {
-    switch(file.fileExt) {
-      case ".3ds":
-        return "/images/filetypes/3ds.png";
-      case ".aac":
-        return "/images/filetypes/aac.png";
-      case ".ai":
-        return "/images/filetypes/ai.png";
-      case ".avi":
-        return "/images/filetypes/avi.png";
-      case ".bmp":
-        return "/images/filetypes/bmp.png";
-      case ".cad":
-        return "/images/filetypes/cad.png";
-      case ".cdr":
-        return "/images/filetypes/cdr.png";
-      case ".css":
-        return "/images/filetypes/css.png";
-      case ".dat":
-        return "/images/filetypes/dat.png";
-      case ".dll":
-        return "/images/filetypes/dll.png";
-      case ".doc":
-        return "/images/filetypes/doc.png";
-      case ".docx":
-        return "/images/filetypes/doc.png";
-      case ".eps":
-        return "/images/filetypes/eps.png";
-      case ".fla":
-        return "/images/filetypes/fla.png";
-      case ".flv":
-        return "/images/filetypes/flv.png";
-      case ".gif":
-        return "/images/filetypes/gif.png";
-      case ".html":
-        return "/images/filetypes/html.png";
-      case ".indd":
-        return "/images/filetypes/indd.png";
-      case ".iso":
-        return "/images/filetypes/iso.png";
-      case ".jpg":
-        return "/images/filetypes/jpg.png";
-      case ".js":
-        return "/images/filetypes/js.png";
-      case ".midi":
-        return "/images/filetypes/midi.png";
-      case ".mov":
-        return "/images/filetypes/mov.png";
-      case ".mp3":
-        return "/images/filetypes/mp3.png";
-      case ".mpg":
-        return "/images/filetypes/mpg.png";
-      case ".pdf":
-        return "/images/filetypes/pdf.png";
-      case ".php":
-        return "/images/filetypes/php.png";
-      case ".png":
-        return "/images/filetypes/png.png";
-      case ".ppt":
-        return "/images/filetypes/ppt.png";
-      case ".ps":
-        return "/images/filetypes/ps.png";
-      case ".psd":
-        return "/images/filetypes/psd.png";
-      case ".raw":
-        return "/images/filetypes/raw.png";
-      case ".sql":
-        return "/images/filetypes/sql.png";
-      case ".svg":
-        return "/images/filetypes/svg.png";
-      case ".tif":
-        return "/images/filetypes/tif.png";
-      case ".txt":
-        return "/images/filetypes/txt.png";
-      case ".wmv":
-        return "/images/filetypes/wmv.png";
-      case ".xls":
-        return "/images/filetypes/xls.png";
-      case ".xml":
-        return "/images/filetypes/xml.png";
-      case ".zip":
-        return "/images/filetypes/zip.png";
-      default:
-        return "/images/filetypes/file-unknown.png";
-    }
+    const fileExtensions = new Set([
+      ".3ds", ".aac", ".ai", ".avi", ".bmp", ".cad", ".cdr", ".css", ".dat",
+      ".dll", ".doc", ".docx", ".eps", ".fla", ".flv", ".gif", ".html", ".indd",
+      ".iso", ".jpg", ".js", ".midi", ".mov", ".mp3", ".mpg", ".pdf", ".php",
+      ".png", ".ppt", ".pptx", ".ps", ".psd", ".raw", ".sql", ".svg", ".tif", ".txt",
+      ".wmv", ".xls", ".xml", ".zip"
+    ]);
+
+    const basePath = "/images/filetypes/";
+    const sharedIconExtensions = {
+      ".doc": ".docx",
+      ".pptx": ".ppt",
+    };
+
+    const fileExt = sharedIconExtensions[file.fileExt] || file.fileExt;
+
+    return fileExtensions.has(fileExt) ? basePath + fileExt.slice(1) + ".png" : basePath + "file-unknown.png";
   }
 }
 
-async function getElementClass(element, index=null) {
-  return new Promise((resolve, reject) => {
-    const classes = element.classList;
-    console.log(classes);
-    if (typeof index === "number") {
-      resolve(classes[index]);
-    } else {
-      resolve(classes);
-    }
-  });
-}
 
 // Event Listeners
-document.getElementById("back-btn").addEventListener("click", async () => {
-  await getCurrentDir().then((currDir) => {
-    fetch("/basedir", {
+const addBackBtnClickListener = () => {
+  document.getElementById("back-btn").addEventListener("click", async () => {
+    const currDir = await getCurrentDir();
+    const baseDir = await fetch("/basedir", {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + localStorage.getItem("token"),
       }
-    }).then((response) => response.text()).then((baseDir) => {
-      if (currDir === baseDir) {
-      } else {
-        GetPreviousDir(currDir).then((prevDir) => {
-          init_grid(prevDir);
-        });
-      }
-    });
+    }).then((response) => response.text());
+
+    if (currDir !== baseDir) {
+      const prevDir = await GetPreviousDir(currDir);
+      init_grid(prevDir);
+    }
   });
-});
+};
 
 // Global event listeners
 // Used for keeping track of dynamically added event listeners
-let hideContextMenuListener;
-let showContextMenuListener;
-let downloadFileListener;
-let showFileInfoListener;
-let hideFileInfoListener;
-let renameFileListener;
-let deleteFileListener;
-let favouriteFileListener;
-let confirmRenameListener;
-let hideInputFieldListener;
-let keyEnterEventListener;
+const eventListeners = {
+  hideContextMenuListener: null,
+  downloadFileListener: null,
+  showFileInfoListener: null,
+  hideFileInfoListener: null,
+  renameFileListener: null,
+  showDeleteConfirmListener: null,
+  hideDeleteConfirmListener: null,
+  deleteFileListener: null,
+  favouriteFileListener: null,
+};
 
-var hideContextMenu = (e, file) => {
-  const contextMenu = document.getElementById("context-menu");
-  if (!contextMenu.contains(e.target)) {
+// Event Listener Utility Functions
 
-    contextMenu.style.opacity = 0;
-    contextMenu.style.transform = "scale(0)";
-    setTimeout(function() {
-      contextMenu.classList.remove(file._id);
-      contextMenu.classList.add("hidden");
-    }, 300);
+/**
+ * Remove an event listener if it exists in the eventListeners object.
+ *
+ * @param {string} elementId - The ID of the DOM element to remove the event listener from.
+ * @param {string} eventType - The type of the event to remove the listener for (e.g., "click").
+ * @param {string} listenerKey - The key used to store the listener function in the eventListeners object.
+ */
+const removeEventListenerIfExists = (elementId, eventType, listenerKey) => {
+  const element = document.getElementById(elementId);
 
-    document.removeEventListener("click", hideContextMenuListener);
-    hideContextMenuListener = null;
-    document.getElementById("download-file").removeEventListener("click", downloadFileListener);
-    downloadFileListener = null;
-    document.getElementById("rename-file").removeEventListener("click", renameFileListener);
-    renameFileListener = null;
+  // Check if the element exists and if there's an existing event listener for the given key
+  if (element && eventListeners[listenerKey]) {
+    // Remove the event listener from the element
+    element.removeEventListener(eventType, eventListeners[listenerKey]);
+    // Set the event listener key in the eventListeners object to null
+    eventListeners[listenerKey] = null;
   }
 };
+
+/**
+ * Add an event listener and store it in the eventListeners object.
+ *
+ * @param {string} elementId - The ID of the DOM element to add the event listener to.
+ * @param {string} eventType - The type of the event to add the listener for (e.g., "click").
+ * @param {string} listenerKey - The key used to store the listener function in the eventListeners object.
+ * @param {function} listenerFn - The event listener function to add to the element.
+ */
+const addEventListenerAndStore = (elementId, eventType, listenerKey, listenerFn) => {
+  const element = document.getElementById(elementId);
+  eventListeners[listenerKey] = listenerFn;
+  // Check if the element exists
+  if (element) {
+    // Store the event listener function in the eventListeners object
+    // Add the event listener to the element
+    element.addEventListener(eventType, eventListeners[listenerKey]);
+  } else {
+    document.addEventListener(eventType, eventListeners[listenerKey]);
+  }
+};
+
+
+// Event listener setup
+const setupEventListeners = () => {
+  addBackBtnClickListener();
+};
+
+// Call setupEventListeners on script load
+setupEventListeners();
+
+var showUserPanel = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const userPanel = document.getElementById("user-panel");
+  userPanel.style.opacity = 1;
+  userPanel.style.transform = "scale(1)";
+  userPanel.classList.remove("hidden");
+  document.addEventListener("click", function hideUserPanelListener(ev) {
+    if (!userPanel.contains(e.target)) {
+      hideUserPanel(ev);
+      document.removeEventListener("click", hideUserPanelListener);
+    }
+  });
+};
+
+var hideUserPanel = (e) => {
+  const userPanel = document.getElementById("user-panel");
+  userPanel.style.opacity = 0;
+  userPanel.style.transform = "scale(0)";
+  userPanel.classList.add("hidden");
+};
+
+var toggleUserPanel = (e) => {
+  const userPanel = document.getElementById("user-panel");
+  if (userPanel.classList.contains("hidden")) {
+    showUserPanel(e);
+  } else {
+    hideUserPanel();
+  }
+}
 
 var downloadFile = (e, file) => {
   const token = localStorage.getItem('token'); // Get the JWT token from localStorage
@@ -417,16 +497,16 @@ var deleteFile = (e, file) => {
       Authorization: "Bearer " + localStorage.getItem("token"),
     }
   }).then((res) => res.text()).then((data) => {
+      hideDeleteConfirm(e, file);
       init_grid(currDir);
   });
 }
 
 var showDeleteConfirm = (e, file) => {
   e.preventDefault();
-  if (hideDeleteConfirmListener != null) {
-    document.removeEventListener("click", hideDeleteConfirmListener);
-    hideDeleteConfirmListener = null;
-  }
+  removeEventListenerIfExists("delete-cancel-btn", "click", "hideDeleteConfirmListener");
+  removeEventListenerIfExists("delete-confirm-btn", "click", "deleteFileListener");
+
   // Show the delete confirmation panel here, populate it with file info
   const deleteConfirmation = document.getElementById("delete-confirm");
   deleteConfirmation.classList.remove("hidden");
@@ -435,17 +515,26 @@ var showDeleteConfirm = (e, file) => {
     deleteConfirmation.style.opacity = 1;
   }, 100);
 
-  hideDeleteConfirmListener = hideDeleteConfirm.bind(null, e, file);
-  const closeConfirmation = document.getElementById("close-delete-confirm");
-  closeConfirmation.addEventListener("click", hideDeleteConfirmListener);
+  addEventListenerAndStore("delete-cancel-btn", "click", "hideDeleteConfirmListener", hideDeleteConfirm.bind(null, e, file));
+  addEventListenerAndStore("delete-confirm-btn", "click", "deleteFileListener", deleteFile.bind(null, e, file));
 }
 
-var showFileInfo = function showFileInfoListener(e, file) {
+var hideDeleteConfirm = (e, file) => {
+  const deleteConfirmation = document.getElementById("delete-confirm");
+  deleteConfirmation.classList.remove(file._id);
+  deleteConfirmation.classList.add("hidden");
+  setTimeout(() => {
+    deleteConfirmation.style.opacity = 0;
+  }, 100);
+
+  removeEventListenerIfExists("delete-cancel-btn", "click", "hideDeleteConfirmListener");
+}
+
+// Show file info panel
+const showFileInfo = (e, file) => {
   e.preventDefault();
-  if (hideFileInfoListener != null) {
-    document.removeEventListener("click", hideFileInfoListener);
-    hideFileInfoListener = null;
-  }
+  removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
+
   // Show the file info panel here, populate it with file info
   const fileInfo = document.getElementById("file-info-modal");
   const fileInfoItems = fileInfo.querySelectorAll(".file-info-item");
@@ -465,21 +554,21 @@ var showFileInfo = function showFileInfoListener(e, file) {
   fileInfoItems[5].innerHTML = "Uploaded: " + ConvertDate(file.uploadDate);
   fileInfoItems[6].innerHTML = "Favourite: " + file.isFavourited;
 
-  hideFileInfoListener = hideFileInfo.bind(null, e, file);
-  const closeInfo = document.getElementById("close-file-info");
-  closeInfo.addEventListener("click", hideFileInfoListener);
+  const hideFileInfoListener = (e) => hideFileInfo(e, file);
+  addEventListenerAndStore("close-file-info", "click", "hideFileInfo", hideFileInfoListener);
 };
 
-var hideFileInfo = (e, file) => {
+// Hide file info panel
+const hideFileInfo = (e, file) => {
   const fileInfo = document.getElementById("file-info-modal");
   fileInfo.style.opacity = 0;
   setTimeout(function() {
     fileInfo.classList.remove(file._id);
     fileInfo.classList.add("hidden");
   }, 250);
-  document.removeEventListener("click", hideFileInfoListener);
-  hideFileInfoListener = null;
-}
+  removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
+};
+
 
 var favouriteFile = (e, file) => {
   fetch ("/togglefavourite?fileId=" + file._id, {
@@ -554,96 +643,83 @@ var renameFile = (e, file) => {
   window.addEventListener("click", hideInputField);
 }
 
-var showContextMenu = function showContextMenuListener (e, file) {
+
+
+const showContextMenu = async (e, file) => {
   e.preventDefault();
 
-  if (hideContextMenuListener != null) {
-    document.removeEventListener("click", hideContextMenuListener);
-    hideContextMenuListener = null;
-  }
-  hideContextMenuListener = hideContextMenu.bind(null, e, file);
+  removeEventListenerIfExists("download-file", "click", "downloadFileListener");
+  addEventListenerAndStore("download-file", "click", "downloadFileListener", downloadFile.bind(null, e, file));
 
+  removeEventListenerIfExists("file-info", "click", "showFileInfoListener");
+  addEventListenerAndStore("file-info", "click", "showFileInfoListener", showFileInfo.bind(null, e, file));
 
-  if (downloadFileListener != null) {
-    document.getElementById("download-file").removeEventListener("click", downloadFileListener);
-    downloadFileListener = null;
-  }
-  downloadFileListener = downloadFile.bind(null, e, file);
+  removeEventListenerIfExists("rename-file", "click", "renameFileListener");
+  addEventListenerAndStore("rename-file", "click", "renameFileListener", renameFile.bind(null, e, file));
 
-  if (showFileInfoListener != null) {
-    document.getElementById("file-info").removeEventListener("click", showFileInfoListener);
-    showFileInfoListener = null;
-  }
-  showFileInfoListener = showFileInfo.bind(null, e, file);
+  removeEventListenerIfExists("delete-file", "click", "showDeleteConfirmListener");
+  addEventListenerAndStore("delete-file", "click", "showDeleteConfirmListener", showDeleteConfirm.bind(null, e, file));
 
-  if (renameFileListener != null) {
-    document.getElementById("rename-file").removeEventListener("click", renameFileListener);
-    renameFileListener = null;
-  }
-  renameFileListener = renameFile.bind(null, e, file);
+  removeEventListenerIfExists("favourite-file", "click", "favouriteFileListener");
+  addEventListenerAndStore("favourite-file", "click", "favouriteFileListener", favouriteFile.bind(null, e, file));
 
-  if (deleteFileListener != null) {
-    document.getElementById("delete-file").removeEventListener("click", deleteFileListener);
-    deleteFileListener = null;
-  }
-  deleteFileListener = deleteFile.bind(null, e, file);
-
-  if (favouriteFileListener != null) {
-    document.getElementById("favourite-file").removeEventListener("click", favouriteFileListener);
-    favouriteFileListener = null;
-  }
-  favouriteFileListener = favouriteFile.bind(null, e, file);
   const favouriteItem = document.getElementById("favourite-file");
-  fetch ("/isfavourited?fileId=" + file._id, {
+  const res = await fetch("/isfavourited?fileId=" + file._id, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
-  }).then((res) => {
-    return res.json();
-  }).then((data) => {
-    if (data.isFavourited) {
-      favouriteItem.innerHTML = "Unfavourite";
-    } else {
-      favouriteItem.innerHTML = "Favourite";
-    }
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
   });
+  const data = await res.json();
+  favouriteItem.innerHTML = data.isFavourited ? "Unfavourite" : "Favourite";
 
-  // Show context menu
   const contextMenu = document.getElementById("context-menu");
   const contextMenuItems = contextMenu.querySelectorAll(".context-menu-item");
   contextMenu.classList.remove("hidden");
   contextMenu.classList.add(file._id);
-  contextMenu.style.left = event.clientX + "px";
-  contextMenu.style.top = event.clientY + "px";
-  setTimeout(function() {
+  contextMenu.style.left = e.clientX + "px";
+  contextMenu.style.top = e.clientY + "px";
+  setTimeout(() => {
     contextMenu.style.opacity = 1;
     contextMenu.style.transform = "scale(1)";
   }, 0);
 
   let n = 0;
   contextMenuItems.forEach((item) => {
-    setTimeout(function() {
+    setTimeout(() => {
       item.style.transform = "translateY(0)";
       item.style.opacity = 1;
     }, n * 50);
     n++;
   });
 
+  removeEventListenerIfExists(null, "click", "hideContextMenuListener");
+  addEventListenerAndStore(null, "click", "hideContextMenuListener", hideContextMenu.bind(null, e, file));
+};
 
-  document.getElementById("download-file").addEventListener("click", downloadFileListener);
+/**
+ * Hide context menu and remove event listeners
+ */
+const hideContextMenu = (e, file) => {
+  const contextMenu = document.getElementById("context-menu");
+  if (e.target !== contextMenu) {
 
-  document.getElementById("file-info").addEventListener("click", showFileInfoListener);
+    contextMenu.style.opacity = 0;
+    contextMenu.style.transform = "scale(0)";
+    setTimeout(function() {
+      contextMenu.classList.remove(file._id);
+      contextMenu.classList.add("hidden");
+    }, 300);
 
-  document.getElementById("favourite-file").addEventListener("click", favouriteFileListener);
-
-  document.getElementById("rename-file").addEventListener("click", renameFileListener);
-
-  document.getElementById("delete-file").addEventListener("click", deleteFileListener);
-
-  document.addEventListener("click", hideContextMenuListener);
-}
+    removeEventListenerIfExists(null, "click", "hideContextMenuListener");
+    removeEventListenerIfExists("download-file", "click", "downloadFileListener");
+    removeEventListenerIfExists("rename-file", "click", "renameFileListener");
+    removeEventListenerIfExists("file-info", "click", "showFileInfoListener");
+    removeEventListenerIfExists("favourite-file", "click", "favouriteFileListener");
+    removeEventListenerIfExists("delete-file", "click", "showDeleteConfirmListener");
+  }
+};
 
 var uploadListener = () => {
   const input = document.createElement("input");
@@ -662,7 +738,6 @@ var uploadFile = (file) => {
   fetch("/upload", {
     method: "POST",
     headers: {
-      // "Content-Type": "multipart/form-data",
       "Authorization": "Bearer " + localStorage.getItem("token"),
     },
     body: formData
@@ -707,12 +782,16 @@ dropZone.addEventListener('drop', e => {
 
 document.getElementById("upload-btn").addEventListener("click", uploadListener);
 
+document.getElementById("user-btn").addEventListener("click", (e) => {toggleUserPanel(e);});
+
+document.getElementById("user-panel-logout").addEventListener("click", logout);
+
 document.addEventListener('DOMContentLoaded', function () {
   const sidebarToggle = document.getElementById('menu-btn');
   const sidebar = document.getElementById('sidebar');
 
   function checkWindowWidth() {
-    if (window.innerWidth >= 1250) {
+    if (window.innerWidth >= 1500) {
       sidebar.classList.add('open');
       sidebarToggle.classList.add('open');
     } else {
@@ -736,13 +815,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 var getCurrentDir = async () => {
-  const result = await fetch("/get-currdir", {
+  if (currDir == null) {
+    const result = await fetch("/basedir", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + localStorage.getItem("token"),
+      }
+    }).then((res) => res.text());
+    currDir = result;
+  }
+  return currDir;
+}
+
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "/login";
+}
+
+async function getTotalStorage() {
+  var totalStorage = await fetch("/total-storage", {
     method: "GET",
     headers: {
+      "Content-Type": "application/json",
       "Authorization": "Bearer " + localStorage.getItem("token"),
     }
-  }).then((res) => res.text()).then((data) => data);
-  return result;
+  }).then((res) => res.text());
+  console.log(totalStorage);
+  var storageElement = document.getElementById("system-total-storage");
+  storageElement.innerHTML = `Used: ${BytesToSize(totalStorage)} / 100 GB`;
+  // return await totalStorage.json();
 }
 
 
@@ -752,4 +854,5 @@ window.onload = async () => {
     init_grid(data);
     init_favourite_list();
   });
+  getTotalStorage();
 };

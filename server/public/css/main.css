@@ -11,6 +11,11 @@ main {
   border-radius: 6px;
 }
 
+.center {
+  text-align: center;
+  margin: 0 auto;
+}
+
 .form-control {
   border-radius: 6px;
 }
@@ -32,6 +37,18 @@ main {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+}
+
+#curr-dir {
+  transform: scale(1);
+  transition: transform 0.2s;
+}
+
+#curr-dir:hover {
+  transform: scale(1.05);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
 }
 
 .btn-default {
@@ -135,6 +152,14 @@ main {
   cursor: pointer;
 }
 
+#system-total-storage {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #474747;
+  margin: 0 auto;
+  text-align: center;
+}
+
 .fav-img {
   width: 10%;
   height: 10%;
@@ -191,11 +216,11 @@ main {
 
 .column .grid-filename {
   font-size: 11px;
-}
+} */
 
 .grid-filename {
-  cursor: pointer;
-} */
+  word-wrap: break-word;
+}
 
 .grid-filename:input {
   display: none;
@@ -218,7 +243,7 @@ main {
   border-color: #606baf;
 }
 
-@media (min-width: 1250px) {
+@media (min-width: 1500px) {
   .sidebar {
     transform: translateX(0);
   }
@@ -238,13 +263,26 @@ main {
   padding-top: 60px;
 }
 
+
 @media (max-width: 1200px) {
+  .grid-container {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (max-width: 1000px) {
   .grid-container {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
 @media (max-width: 800px) {
+  .grid-container {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 650px) {
   .grid-container {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -257,6 +295,7 @@ main {
   text-align: center;
   transition: transform 0.2s, filter 0.2s;
   user-select: none;
+  max-width: 150px;
 }
 
 .grid-item:hover {
@@ -321,4 +360,82 @@ main {
 .file-info-item {
   padding-bottom: 5px;
   user-select: none;
+}
+
+.btn-default {
+  background-color: #929292;
+  color: white;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  outline: none;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.1s ease-out;
+}
+
+.btn-default:hover {
+  transform: scale(1.03);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  filter: brightness(90%);
+}
+
+.btn-delete {
+  background-color: #e60000;
+  color: white;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 5px;
+  outline: none;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.1s ease-out;
+}
+
+.btn-delete:hover {
+  transform: scale(1.03);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  filter: brightness(90%);
+}
+
+#delete-confirm {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  list-style: none;
+  width: 250px;
+  padding: 8px;
+  z-index: 1000;
+  transition: all 0.2s ease-out;
+  box-shadow: 0 2px 4px 0 rgba(0, 0.1, 0, 0.1);
+}
+
+#user-panel {
+  position: fixed;
+  top: 70px;
+  right: 10px;
+  margin: 0 auto;
+  text-align: center;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  list-style: none;
+  width: 200px;
+  padding: 8px;
+  z-index: 1000;
+  transition: all 0.2s ease-out;
+  box-shadow: 0 2px 4px 0 rgba(0, 0.1, 0, 0.1);
+}
+
+#last-updated {
+  padding-top: 300px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #c8c8c8;
+  margin: 0 auto;
+  text-align: center;
 }

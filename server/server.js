@@ -35,12 +35,9 @@ server.listen(PORT, function () {
   var host = server.address().address;
   host = host == "::" ? "localhost" : host;
   var port = server.address().port;
-  console.log(host);
-  console.log(port);
-  console.log("Server listening at http://%s:%s", host, port);
+  console.log("Server listening at https://%s:%s", host, port);
 });
 
 // InsertFilesystem(await GetBaseDir());
 
-
-// GetAllDocuments("myDrive").then(data => console.log(data));
+// GetAllDocuments("files").then(data => console.log(data));

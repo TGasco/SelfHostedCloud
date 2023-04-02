@@ -1,16 +1,16 @@
 // Connect to the MongoDB database
-import { MongoClient, MongoTopologyClosedError } from 'mongodb';
+import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
 import archiver from 'archiver';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
-import { basename, extname, dirname, join } from 'path';
+import { basename, extname, dirname } from 'path';
 import { InsertDocument, QueryCollection, UpdateDocument } from './dbops.js';
 // Define the MongoDB connection URI
 const uri = "mongodb://127.0.0.1:27017"
-const dbName = "self-hosted-cloud";
-const collectionName = "myDrive";
+const dbName = "MyCloudDrive";
+const collectionName = "files";
 
 // Define the file metadata schema
 const fileSchema = {
@@ -26,7 +26,7 @@ const fileSchema = {
 };
 
 // Create a model for the file metadata
-const File = mongoose.model("myDrive", fileSchema, collectionName);
+const File = mongoose.model("files", fileSchema, collectionName);
 
 async function GetDocumentsWithRoot(root, deep=false) {
   if (deep) {

@@ -9,10 +9,7 @@ import { ObjectId } from "mongodb";
 
 // Define the MongoDB connection URI
 const uri = "mongodb://127.0.0.1:27017";
-// const mongoUser = "Admin";
-// const mongoPass = "hygfa7-tyjnaf-fohpUd";
-// const uri = `mongodb+srv://${mongoUser}:${mongoPass}@self-hosted-cloud.iofm1d0.mongodb.net/?retryWrites=true&w=majority`;
-const dbName = "self-hosted-cloud";
+const dbName = "MyCloudDrive";
 
 async function CountDocuments(collectionName) {
   const client = new MongoClient(uri, { useNewUrlParser: true });
@@ -162,6 +159,33 @@ async function UpdateDocument(document, updatedPairs, collectionName) {
   }
 }
 
+async function getTotalStorageUsed(collectionName) {
+  const client = new MongoClient(uri, { useUnifiedTopology: true });
+
+  try {
+    await client.connect();
+
+    const db = client.db(dbName);
+    const collection = db.collection(collectionName);
+
+    const result = await collection.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalSize: { $sum: '$fileSize' }
+        }
+      }
+    ]).toArray();
+
+    return result[0]?.totalSize || 0;
+  } catch (error) {
+    console.error('Error connecting to the database:', error);
+    return 0;
+  } finally {
+    await client.close();
+  }
+}
+
 export {
   CountDocuments,
   GetAllDocuments,
@@ -170,5 +194,6 @@ export {
   DocumentExists,
   InsertDocument,
   RemoveDocument,
-  UpdateDocument
+  UpdateDocument,
+  getTotalStorageUsed
 };

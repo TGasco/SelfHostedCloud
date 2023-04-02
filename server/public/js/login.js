@@ -54,6 +54,10 @@ function submitForm(event) {
     });
   }
 
+  function redirectToSignup() {
+    window.location.href = "/signup";
+  }
+
 
 function signUp(event) {
   event.preventDefault();
@@ -101,3 +105,5 @@ function signUp(event) {
   function releaseButton(button) {
     button.style.transform = "translateY(0)";
   }
+
+document.getElementById("signup-link").addEventListener("click", redirectToSignup);

@@ -1,8 +1,8 @@
 {
     "uri": "mongodb://127.0.0.1:27017",
-    "database": "self-hosted-cloud",
+    "database": "MyCloudDrive",
     "collections": [
-        "myDrive",
-        "userCredentials"
+        "files",
+        "users"
     ]
 }

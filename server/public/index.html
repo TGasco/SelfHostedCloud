@@ -40,6 +40,7 @@
                         <li id="system-uptime" class="sidebar-item">Uptime: </li>
                         <li id="system-lastsync" class="sidebar-item">Last Sync: </li>
                     </ul>
+                    <p id="system-total-storage" class="sidebar-item"></p>
                 </div>
             </div>
         </div>
@@ -49,9 +50,10 @@
             <div id="drop-zone">
                 <div id="grid"></div>
             </div>
+            <p id="last-updated" class="center">Last Updated: Just Now</p>
         </main>
 
-        <button id="upload-btn" class="upload-btn fa-regular fa-cloud-arrow-up fa-3x"></button>
+        <button id="upload-btn" class="upload-btn fa-regular fa-cloud-arrow-up fa-3x" style="color: #ffffff;"></button>
 
         <!-- (Initially) Hidden Components -->
         <!-- Context menu (hidden on page load) -->
@@ -80,10 +82,23 @@
         <input type="text" class="hidden edit-input" id="edit-filename" value="">
 
         <div id="delete-confirm" class="hidden">
-            <i id="close-delete-confirm" class="btn-default close fa-solid fa-xmark" style="float: right;" aria-hidden="true"></i>
-            <h3>Are you sure you want to delete this file?</h3>
-            <button id="delete-confirm-btn" class="btn-default">Delete</button>
+            <h4>Are you sure you want to delete this file?</h4>
+            <p style="font-size: 12px">By pressing "Delete", you will permanently remove this item from your Drive.</p>
+            <button id="delete-confirm-btn" class="btn-delete">Delete</button>
             <button id="delete-cancel-btn" class="btn-default">Cancel</button>
+        </div>
+
+        <div id="user-panel" class="hidden">
+            <div id="user-panel-content">
+                <h3>Account</h3>
+                <div id="user-panel-info">
+                    <h4 id="user-panel-username"></h4>
+                </div>
+                <div id="user-panel-actions">
+                    <button id="user-panel-logout" class="btn-default">Logout</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Load Script -->
         <script type="module" src="/js/index.js"></script>

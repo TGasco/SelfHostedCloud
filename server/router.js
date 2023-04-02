@@ -8,14 +8,14 @@ import { Extract } from "unzipper";
 import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile } from "../database/filesdb.js";
 import { GetBaseDir, GetUserByCreds, NewUser } from "../database/usersdb.js";
 import os from "os";
-import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection } from "../database/dbops.js";
+import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection, getTotalStorageUsed } from "../database/dbops.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { comparePasswords, isValidInput } from "../database/crypt.js";
 
 let router = express.Router();
 
-var currDir = await GetBaseDir();
+var currDir = "";
 const storage = multer.diskStorage({
   destination: async (req, file, callback) => {
       callback(null, currDir);
@@ -29,8 +29,8 @@ let upload = multer({ storage: storage});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const fileCollection = "myDrive";
-const userCollection = "userCredentials";
+const fileCollection = "files";
+const userCollection = "users";
 
 function authenticateToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -54,6 +54,18 @@ function authenticateToken(req, res, next) {
     res.sendStatus(401);
   }
 }
+
+router.get("uid", authenticateToken, function (req, res) {
+  // Check auth status
+  if (!req.decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    res.setHeader("Content-type", "application/json");
+    res.setHeader("status", "200");
+    res.send(JSON.stringify(req.decoded.userId));
+  }
+});
 
 router.get("/myDrive", authenticateToken, function (req, res) {
   // Check auth status
@@ -164,13 +176,26 @@ router.get("/get-favourites", authenticateToken, (req, res) => {
 });
 
 router.get("/basedir", authenticateToken, (req, res) => {
-  GetBaseDir().then((data) => {
-    res.send(data);
-  });
+  var decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    GetBaseDir(decoded.userId).then((data) => {
+      res.send(data);
+    });
+  }
 });
 
 router.get("/get-currdir", authenticateToken, (req, res) => {
+  var decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    // Check if currDir is set
     res.send(currDir);
+  }
 });
 
 router.post("/currdir", authenticateToken, (req, res) => {
@@ -188,7 +213,7 @@ router.get("/userCollection", (req, res) => {
 
 router.get("/download", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
-  GetDocumentById(fileId, "myDrive").then((file) => {
+  GetDocumentById(fileId, "files").then((file) => {
     const path = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
     if (file[0].isDirectory) {
       ZipDir(path, function(err) {
@@ -223,7 +248,7 @@ router.get("/download", authenticateToken, (req, res) => {
 router.get("/file-rename", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
   const newName = req.query.newName;
-  GetDocumentById(fileId, "myDrive").then((file) => {
+  GetDocumentById(fileId, "files").then((file) => {
     // Rename file here
     RenameFile(file[0], newName).then(() => {
       res.send(file[0].fileName + file[0].fileExt + " renamed to " + newName);
@@ -233,24 +258,24 @@ router.get("/file-rename", authenticateToken, (req, res) => {
 
 router.get("/file-info", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
-  GetDocumentById(fileId, "myDrive").then((file) => {
+  GetDocumentById(fileId, "files").then((file) => {
     res.send(file[0]);
   });
 });
 
 router.get("/isfavourited", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
-  GetDocumentById(fileId, "myDrive").then((file) => {
+  GetDocumentById(fileId, "files").then((file) => {
     res.send({"isFavourited": file[0].isFavourited});
   });
 });
 
 router.get("/togglefavourite", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
-  GetDocumentById(fileId, "myDrive").then((file) => {
+  GetDocumentById(fileId, "files").then((file) => {
     // Toggle favourite here
-    UpdateDocument(file[0], {"isFavourited": !file[0].isFavourited}, "myDrive").then(() => {
-      GetDocumentById(fileId, "myDrive").then((file) => {
+    UpdateDocument(file[0], {"isFavourited": !file[0].isFavourited}, "files").then(() => {
+      GetDocumentById(fileId, "files").then((file) => {
         res.send({"isFavourited": file[0].isFavourited});
       });
     });
@@ -259,19 +284,35 @@ router.get("/togglefavourite", authenticateToken, (req, res) => {
 
 router.get("/file-delete", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
-  GetDocumentById(fileId, "myDrive").then((file) => {
+  GetDocumentById(fileId, "files").then((file) => {
     // Delete file here
-    RemoveDocument(file[0], "myDrive");
-    fs.rmSync(join(file[0].dirPath, file[0].fileName + file[0].fileExt));
-    res.send(file[0].fileName + file[0].fileExt + " deleted");
+    try {
+      fs.rmSync(join(file[0].dirPath, file[0].fileName + file[0].fileExt));
+      RemoveDocument(file[0], "files");
+      res.send(file[0].fileName + file[0].fileExt + " deleted");
+    } catch (err) {
+      res.status(500).send("Error deleting file");
+    }
   });
+});
+
+router.get("/total-storage", authenticateToken, (req, res) => {
+  var decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    getTotalStorageUsed("files").then((data) => {
+      res.send(JSON.stringify(data));
+    });
+  }
 });
 
 // POST Requests
 router.post("/upload", authenticateToken, upload.single("file"), (req, res) => {
   const file = req.file;
   getFileMetadata(file.path).then((metadata) => {
-    InsertDocument(metadata, "myDrive").then(() => {
+    InsertDocument(metadata, "files").then(() => {
       res.send("File uploaded successfully");
     });
   });

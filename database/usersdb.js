@@ -4,10 +4,10 @@ import { join } from 'path';
 import { GetDocumentById, InsertDocument, QueryCollection } from './dbops.js';
 import { hashPassword, isValidInput } from './crypt.js';
 
-const collectionName = "userCredentials";
-const userId = "63e6d759ecbacadf9cc52f25";
-// Username: test
-// Password: test
+// Credentials for root user: REMOVE THIS IN PRODUCTION
+// Username: rootUser
+// Password: rootUser123
+const collectionName = "users";
 const homedir = os.homedir();
 const baseDir = join(homedir, "SelfHostedCloudDrive");
 
@@ -24,7 +24,12 @@ async function NewUser(userName, userPass, basedir=null, userDefaults=null) {
     user = {
       userName: userName,
       userPass: hashedPass,
-      userDefaults: { baseDir: basedir }
+      userDefaults: { baseDir: basedir,
+                      lastSync: new Date(),
+                      totalStorageUsed: 0,
+                      totalStorage: 0,
+                      theme: "light",
+                      showFileExtensions: false, }
     };
   } else {
     user = {
@@ -41,8 +46,16 @@ async function NewUser(userName, userPass, basedir=null, userDefaults=null) {
   }
 }
 
-function GetUserId() {
-  return userId;
+async function SetDefaults(userId) {
+  const user = await GetUserById(userId);
+  user[0].userDefaults = {};
+  return await UpdateDocument(user, collectionName);
+}
+
+async function UpdateLastSync(userId) {
+  const user = await GetUserById(userId);
+  user[0].userDefaults.lastSync = new Date();
+  return await UpdateDocument(user, collectionName);
 }
 
 function GetUserById(id) {
@@ -54,11 +67,10 @@ async function GetUserByCreds(userName) {
   return await QueryCollection(query, collectionName);
 }
 
-async function GetBaseDir() {
-  const userId = GetUserId();
+async function GetBaseDir(userId) {
   const user = await GetDocumentById(userId, collectionName);
   return user[0].userDefaults.baseDir;
 }
 
 
-export { NewUser, GetUserId, GetBaseDir, GetUserById, GetUserByCreds };
+export { NewUser, GetBaseDir, GetUserById, GetUserByCreds };

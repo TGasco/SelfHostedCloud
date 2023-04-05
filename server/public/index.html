@@ -26,13 +26,6 @@
                     <h3>Favourites</h3>
                     <ul id="favourites-list" class="sidebar-list"></ul>
                 </div>
-                <div id="preferences-container" class="sidebar-container">
-                    <h3>Preferences</h3>
-                    <ul id="preferences-list" class="sidebar-list">
-                        <li id="dark-mode" class="sidebar-item">Dark Mode</li>
-                        <li id="light-mode" class="sidebar-item">Light Mode</li>
-                    </ul>
-                </div>
                 <div id="system-details-container" class="sidebar-container">
                     <h3>System Details</h3>
                     <ul id="system-details-list" class="sidebar-list">
@@ -47,6 +40,10 @@
 
         <!-- Main static page elements here -->
         <main>
+            <div id="search-bar" class="text-field center">
+                <!-- <i id="search-btn" class="fa-solid fa-search" aria-hidden="true"></i> -->
+                <input id="search-input" type="text" placeholder="Search Drive...">
+            </div>
             <div id="drop-zone">
                 <div id="grid"></div>
             </div>
@@ -90,9 +87,13 @@
 
         <div id="user-panel" class="hidden">
             <div id="user-panel-content">
-                <h3>Account</h3>
+                <h3 id="user-panel-username">Account</h3>
                 <div id="user-panel-info">
-                    <h4 id="user-panel-username"></h4>
+                </div>
+                <div id="preferences-container" class="sidebar-container">
+                    <h4>Preferences</h4>
+                    <ul id="preferences-list" class="user-panel-info">
+                    </ul>
                 </div>
                 <div id="user-panel-actions">
                     <button id="user-panel-logout" class="btn-default">Logout</button>

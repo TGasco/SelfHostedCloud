@@ -22,6 +22,7 @@ function submitForm(event) {
           // Save the token, e.g., in the local storage
           localStorage.setItem("token", data.token);
           // Redirect the user to the homepage
+          redirectToHomepage();
         });
       } else {
         console.log(res);
@@ -29,7 +30,6 @@ function submitForm(event) {
         errorMessage.classList.add('show');
         return;
       }
-      redirectToHomepage();
     });
   }
 

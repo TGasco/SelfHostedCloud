@@ -2,13 +2,15 @@ import { BytesToSize, ConvertDate } from './helperfuncs.js';
 
 // Store the current directory
 let currDir = null;
-
+let userPreferences;
+let username;
 /**
  * Initialize the grid view with the files and folders at the given path.
  * @param {string} path - The path to display in the grid view.
  */
-async function init_grid(path) {
-  const oldGrid = document.getElementById("grid");
+async function init_grid(path, documents = null) {
+  let files;
+  const oldGrid = document.getElementById("grid") || document.getElementById("empty-drive-message");
   oldGrid.className = "grid-container";
 
   // Create a temporary grid element
@@ -18,47 +20,64 @@ async function init_grid(path) {
 
   const currDirElement = document.getElementById("curr-dir");
 
-  // Get and display the relative path
-  const relativePath = await GetRelativePath(path);
-  currDirElement.textContent = relativePath;
 
   // Create a document fragment to hold the grid items
   const gridFragment = document.createDocumentFragment();
 
   try {
     // Fetch the file metadata
-    const files = await fetchFilesMetadata(path);
+    if (!documents) {
+      // Get and display the relative path
+      const relativePath = await GetRelativePath(path);
+      currDirElement.textContent = relativePath;
+      // Get the files and folders at the given path
+      files = await fetchFilesMetadata(path);
+    } else {
+      files = documents;
+    }
 
     if (!files) {
       redirectToLogin();
       return;
     }
 
-    // Create an array of promises for creating grid items
-    const iconPromises = files.map((file, i) => createGridItem(file, path, i, gridFragment));
+    if (files.length === 0) {
+      const emptyMessage = document.createElement("div");
+      emptyMessage.innerHTML = "Your Drive is empty!<br>Upload some files to get started.";
+      emptyMessage.id = "empty-drive-message";
+      emptyMessage.className = "empty-drive-message center";
+      oldGrid.replaceWith(emptyMessage);
+      // newGrid.appendChild(emptyMessage);
+    } else {
+      // Create an array of promises for creating grid items
+      const iconPromises = files.map((file, i) => createGridItem(file, i, gridFragment));
 
-    // Wait for all the promises to resolve
-    await Promise.all(iconPromises);
+      // Wait for all the promises to resolve
+      await Promise.all(iconPromises);
 
-    // Append the document fragment to the new grid
-    newGrid.appendChild(gridFragment);
+      // Append the document fragment to the new grid
+      newGrid.appendChild(gridFragment);
+    }
 
     // Replace the old grid with the new grid
     oldGrid.replaceWith(newGrid);
 
-    // Update the current directory on the server
-    const success = await updateCurrentDir(path);
+    if (!documents) {
+      // Update the current directory on the server
+      const success = await updateCurrentDir(path);
 
-    if (!success) {
-      redirectToLogin();
-      return;
+      if (!success) {
+        redirectToLogin();
+        return;
+      }
+      currDir = path;
     }
 
-    currDir = path;
   } catch (error) {
     console.error("Error fetching metadata or current directory:", error);
   }
 }
+
 
 /**
  * Initialize the favourite list view with the user's favourite files and folders.
@@ -100,6 +119,105 @@ async function init_favourite_list() {
     oldFavList.replaceWith(newFavList);
   } catch (error) {
     console.error("Error fetching favourites:", error);
+  }
+}
+
+async function init_preferences() {
+  const preferences = await GetPreferences();
+  const preferencesList = document.getElementById("preferences-list");
+  const newPreferences = document.createElement("ul");
+  newPreferences.id = "preferences-list";
+  newPreferences.className = "sidebar-list";
+
+  const preferencesFragment = document.createDocumentFragment();
+
+  try {
+    if (preferences.length === 0) {
+      const pref = document.createElement("p");
+      pref.className = "sidebar-item";
+      const text = document.createElement("span");
+      text.textContent = "No preferences ";
+      text.className = "pref-text";
+      pref.appendChild(text);
+      preferencesFragment.appendChild(pref);
+    } else {
+      const prefPromises = Object.entries(preferences).map((pref, i) => createPrefItem(pref, i, preferencesFragment));
+
+      await Promise.all(prefPromises);
+    }
+
+    newPreferences.appendChild(preferencesFragment);
+    preferencesList.replaceWith(newPreferences);
+  } catch (error) {
+    console.error("Error fetching preferences:", error);
+  }
+}
+
+function createPrefItem(pref, i, prefFragment) {
+  return new Promise(async (resolve) => {
+    const [key, value] = pref;
+    const prefValue = value.prefValue;
+    const prefItem = document.createElement("li");
+    prefItem.className = "sidebar-item preference-item";
+
+    const prefName = document.createElement("p");
+    prefName.textContent = value.prefString;
+    prefName.className = "pref-name";
+    prefItem.appendChild(prefName);
+
+    // Create label element for the switch
+    const switchLabel = document.createElement("label");
+    switchLabel.className = "switch";
+
+    const prefToggle = document.createElement("input");
+    prefToggle.type = "checkbox";
+    prefToggle.id = key;
+    // prefToggle.id = "pref-toggle-" + i;
+    prefToggle.className = "pref-toggle";
+    if (prefValue) {
+      prefToggle.checked = true;
+    } else {
+      prefToggle.checked = false;
+    }
+    // prefToggle.textContent = prefValue;
+    prefToggle.addEventListener("click", (e) => {
+      updatePreference(e);
+    });
+
+    // Add the input element to the switch label
+    switchLabel.appendChild(prefToggle);
+
+    // Create a span element for the slider and add it to the switch label
+    const sliderSpan = document.createElement("span");
+    sliderSpan.className = "slider";
+    switchLabel.appendChild(sliderSpan);
+
+    // Add the switch label to the prefItem
+    prefItem.appendChild(switchLabel);
+
+    prefFragment.appendChild(prefItem);
+    resolve();
+  });
+}
+
+
+const updatePreference = async (e) => {
+  try {
+    const prefName = e.target.id;
+    const uri = `/update-preferences?prefKey=${prefName}&prefValue=${e.target.textContent}`;
+    const response = await fetch("/update-preferences?prefKey=" + prefName, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    const data = await response.json();
+    LoadPage();
+    return data;
+  } catch (error) {
+    console.error("Error updating preferences:", error);
   }
 }
 
@@ -153,7 +271,6 @@ async function GetFavourites() {
     });
 
     if (response.status !== 200) {
-      redirectToLogin();
       return [];
     }
 
@@ -161,6 +278,52 @@ async function GetFavourites() {
     return favourites;
   } catch (error) {
     console.error("Error fetching favourites:", error);
+    return [];
+  }
+}
+
+async function GetPreferences() {
+  try {
+    const response = await fetch("/get-preferences", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    if (response.status !== 200) {
+      return [];
+    }
+
+    const preferences = await response.json();
+    return preferences;
+  } catch (error) {
+    console.error("Error fetching preferences:", error);
+    return [];
+  }
+}
+
+async function SearchForFiles(searchTerm) {
+  try {
+    const response = await fetch("/file-search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+      body: JSON.stringify({ searchTerm }),
+    });
+
+    if (response.status !== 200) {
+      return [];
+    }
+
+    const files = await response.json();
+    console.log(files);
+    return files;
+  } catch (error) {
+    console.error("Error fetching search results:", error);
     return [];
   }
 }
@@ -239,7 +402,7 @@ function redirectToLogin() {
  * @returns {Promise} A promise that resolves
  *  * when the grid item has been created and appended to the document fragment.
  */
-function createGridItem(file, path, i, gridFragment) {
+function createGridItem(file, i, gridFragment) {
   return new Promise(async (resolve) => {
     const gridItem = document.createElement("div");
     gridItem.id = file._id;
@@ -252,7 +415,8 @@ function createGridItem(file, path, i, gridFragment) {
     if (file.isDirectory) {
       gridItem.addEventListener("click", (e) => {
         e.preventDefault();
-        init_grid(path + "/" + file.fileName);
+        // init_grid(path + "/" + file.fileName);
+        init_grid(file.dirPath + "/" + file.fileName);
       });
     } else {
       gridItem.addEventListener("click", (e) => {
@@ -270,7 +434,11 @@ function createGridItem(file, path, i, gridFragment) {
     const fileName = document.createElement("div");
     fileName.id = "filename-" + i;
     fileName.className = "grid-filename";
-    fileName.textContent = file.fileName;
+    if (userPreferences.showFileExtensions.prefValue) {
+      fileName.textContent = file.fileName + file.fileExt;
+    } else {
+      fileName.textContent = file.fileName;
+    }
     gridItem.appendChild(fileName);
 
     gridFragment.appendChild(gridItem);
@@ -498,6 +666,7 @@ var deleteFile = (e, file) => {
     }
   }).then((res) => res.text()).then((data) => {
       hideDeleteConfirm(e, file);
+      getTotalStorage();
       init_grid(currDir);
   });
 }
@@ -724,17 +893,31 @@ const hideContextMenu = (e, file) => {
 var uploadListener = () => {
   const input = document.createElement("input");
   input.type = "file";
+  input.multiple = true;
+  input.webkitdirectory = true;
 
   input.onchange = e => {
-    const file = e.target.files[0];
-    uploadFile(file);
+    const files = e.target.files;
+    uploadFiles(files);
   }
   input.click();
 }
 
-var uploadFile = (file) => {
+const uploadFiles = async (files) => {
   const formData = new FormData();
-  formData.append("file", file);
+  const filePaths = [];
+
+  for (const file of files) {
+    console.log(file);
+    formData.append("files", file);
+    if (file.webkitRelativePath) {
+      filePaths.push(file.webkitRelativePath);
+    }
+  }
+
+  formData.append("filePaths", JSON.stringify(filePaths));
+  console.log(filePaths);
+
   fetch("/upload", {
     method: "POST",
     headers: {
@@ -743,12 +926,25 @@ var uploadFile = (file) => {
     body: formData
   }).then((res) => {
     console.log(res);
+    getTotalStorage();
     init_grid(currDir);
   }).catch((err) => {
     console.log(err);
   });
-}
+};
 
+const fileSearch = async (e) => {
+  const searchQuery = e.target.value;
+  console.log(searchQuery);
+  if (searchQuery.length > 0) {
+    const res = await SearchForFiles(searchQuery);
+    init_grid(null, res);
+  } else {
+    init_grid(currDir);
+  }
+};
+
+document.getElementById("search-input").addEventListener("input", fileSearch);
 
 const dropZone = document.getElementById("drop-zone");
 
@@ -776,8 +972,8 @@ const dropZone = document.getElementById("drop-zone");
 
 // Handle dropped files
 dropZone.addEventListener('drop', e => {
-  const file = e.dataTransfer.files[0];
-  uploadFile(file);
+  const files = e.dataTransfer.files;
+  uploadFiles(files);
 });
 
 document.getElementById("upload-btn").addEventListener("click", uploadListener);
@@ -841,18 +1037,50 @@ async function getTotalStorage() {
       "Authorization": "Bearer " + localStorage.getItem("token"),
     }
   }).then((res) => res.text());
-  console.log(totalStorage);
   var storageElement = document.getElementById("system-total-storage");
   storageElement.innerHTML = `Used: ${BytesToSize(totalStorage)} / 100 GB`;
-  // return await totalStorage.json();
 }
 
+async function SyncWithServer() {
+  const result = await fetch("/sync", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  });
+  if (result.status == 201) {
+    console.log("Sync Complete!");
+  } else {
+    console.error("Sync Failed!");
+  }
+}
 
-// Initialise the grid on page load
-window.onload = async () => {
+async function LoadPage() {
+  userPreferences = await GetPreferences();
   await getCurrentDir().then((data) => {
     init_grid(data);
     init_favourite_list();
   });
+}
+
+async function GetUsername() {
+  const result = await fetch("/username", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => res.json());
+  return result;
+}
+
+// Initialise the grid on page load
+window.onload = async () => {
+  init_preferences();
+  SyncWithServer();
+  await LoadPage();
+  username = await GetUsername();
+  document.getElementById("user-panel-username").textContent = `${username}'s Cloud`;
   getTotalStorage();
 };

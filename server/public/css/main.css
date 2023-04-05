@@ -1,6 +1,12 @@
 * {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+    color: #1f1f3f;
+}
+
+p, h1, h2, h3, h4, h5, h6, li, a, button, input, textarea, select, label {
+  padding: 0;
+  margin: 0;
 }
 
 main {
@@ -38,6 +44,43 @@ main {
   justify-content: center;
   z-index: 1000;
 }
+
+#search-input {
+  width: 45%;
+  height: 30px;
+  border-radius: 35px;
+  border: 1px solid #b3b3b3;
+  padding: 0 10px;
+  font-size: 1rem;
+  transform: scale(1);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  z-index: 9999;
+  transition: transform 0.35s, box-shadow 0.35s, border 0.35s, width 0.35s;
+}
+
+#search-input:hover {
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  transform: scale(1.03);
+  cursor: pointer;
+}
+
+#search-input:focus {
+  outline: none;
+  border: 1px solid #00B6FF;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  transform: scale(1.03);
+  width: 75%;
+}
+
+#search-input::placeholder {
+  color: #8e8e8e;
+}
+
+#search-input:not(:focus)::placeholder {
+  transform: scale(1);
+  transition: transform 0.35s;
+}
+
 
 #curr-dir {
   transform: scale(1);
@@ -141,14 +184,23 @@ main {
 
 .sidebar-item {
   display: flex;
+  justify-content: space-between;
   align-items: center;
+  font-size: 0.9rem;
   padding: 10px;
-  transition: background-color 0.3s ease-out;
   user-select: none;
+  transform: scale(1);
+  filter: brightness(100%);
+  transition: transform 0.2s, brightness 0.2s, color 0.15s ease-in-out;
+}
+
+.sidebar-item:hover {
+  filter: brightness(110%);
+  transform: scale(1.005);
 }
 
 .sidebar-item.fav-item:hover {
-  background-color: #cfcfcf;
+  color: #929292;
   cursor: pointer;
 }
 
@@ -175,14 +227,16 @@ main {
   border-radius: 70%;
   margin-right: 25px;
   background-color: #00B6FF;
+  box-shadow: 0px 1px 0px 1px rgba(0, 0.1, 0, 0.1);
   transform: scale(1);
   filter: brightness(100%);
-  transition: transform 0.15s, filter 0.15s;
+  transition: transform 0.15s, filter 0.15s, box-shadow 0.14s;
 }
 
 .upload-btn:hover {
   cursor: pointer;
   transform: scale(1.1);
+  box-shadow: 1px 2px 1px 2px rgba(0, 0.15, 0, 0.15);
   filter: brightness(90%);
 }
 
@@ -198,6 +252,60 @@ main {
   border: 2px dashed #00bfffe4;
   background-color: #00bfff4e;
   cursor: pointer;
+}
+
+.pref-name {
+}
+
+/* General switch styles */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 17px;
+}
+
+/* Hide the default checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* Customize the slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #bfbfbf;
+  transition: 0.35s;
+  border-radius: 17px;
+}
+
+/* Add a background color to the slider when the input is checked */
+.switch input:checked + .slider {
+  background-color: #00B6FF;
+}
+
+/* Add a circular indicator inside the slider */
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 13px;
+  width: 13px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.35s;
+  border-radius: 50%;
+}
+
+/* Move the circular indicator to the right when the input is checked */
+.switch input:checked + .slider:before {
+  transform: translateX(13px);
 }
 
 #directory-wrapper {
@@ -302,6 +410,14 @@ main {
   cursor: pointer;
   transform: scale(1.05);
   filter: brightness(90%);
+}
+
+#empty-drive-message {
+  padding: 100px;
+  font-size: 1.2rem;
+  line-height: 2;
+  font-weight: bold;
+  color: #c8c8c8;
 }
 
 .hidden {

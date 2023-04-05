@@ -1,20 +1,172 @@
 #!/usr/bin/env python3
 
+"""
+This script automatically sets up the environment for a web app by installing the required
+dependencies (node.js and MongoDB) on the user's machine. It works on Linux, macOS, and Windows.
+On macOS, it also installs Homebrew if it's not already installed.
+"""
+
 import os
 import sys
-import platform
 import subprocess
 import shutil
-import tempfile
-import argparse
-from typing import Optional
+import platform
 import shlex
+from typing import List
+
+hasUsedBrew = False
+
+def run_command(command: List[str]) -> None:
+    """
+    Run a shell command and print its output.
+
+    Args:
+        command (List[str]): The command to run, split into a list of arguments.
+
+    Returns:
+        None
+    """
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+
+    if stdout:
+        print(stdout.decode("utf-8").strip())
+    if stderr:
+        print(stderr.decode("utf-8").strip())
+
+def install_pip() -> None:
+    """
+    Install pip if it's not already installed.
+
+    Returns:
+        None
+    """
+    if not shutil.which("pip"):
+        print("Installing pip...")
+        run_command(["curl", "https://bootstrap.pypa.io/get-pip.py", "-o", "get-pip.py"])
+        run_command(["python", "get-pip.py"])
+        os.remove("get-pip.py")
+    else:
+        print("pip is already installed.")
 
 
-class PartitionError(Exception):
-    pass
+def install_requests() -> None:
+    """
+    Install requests library using pip if it's not already installed.
+
+    Returns:
+        None
+    """
+    try:
+        import requests
+    except ImportError:
+        print("Installing requests library...")
+        run_command(["pip", "install", "requests"])
 
 
+def install_homebrew() -> None:
+    """
+    Install Homebrew on macOS if it's not already installed.
+
+    Returns:
+        None
+    """
+    if not shutil.which("brew"):
+        print("Installing Homebrew...")
+        run_command(["/bin/bash", "-c", "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"])
+    else:
+        print("Homebrew is already installed.")
+
+def brew_cleanup() -> None:
+    """
+    Cleanup Homebrew on macOS.
+
+    Returns:
+        None
+    """
+    run_command(["brew", "cleanup"])
+
+
+def install_nodejs() -> None:
+    """
+    Install node.js if it's not already installed.
+
+    Returns:
+        None
+    """
+    if not shutil.which("node"):
+        print("Installing node.js...")
+
+        if sys.platform == "darwin":
+            run_command(["brew", "install", "node"])
+            hasUsedBrew = True
+        elif sys.platform == "linux":
+            # Check for admin privileges
+            if not is_admin():
+                elevate_privileges_windows()
+            run_command(["curl", "-fsSL", "https://deb.nodesource.com/setup_lts.x", "|", "sudo", "-E", "bash", "-"])
+            run_command(["sudo", "apt-get", "install", "-y", "nodejs"])
+        elif sys.platform == "win32":
+            import requests
+            # Check for admin privileges
+            if not is_admin():
+                elevate_privileges_windows()
+            nodejs_url = "https://nodejs.org/dist/v16.14.0/node-v16.14.0-x64.msi"
+            response = requests.get(nodejs_url)
+            with open("nodejs_installer.msi", "wb") as file:
+                file.write(response.content)
+
+            print("Installing node.js...")
+            run_command(["msiexec", "/i", "nodejs_installer.msi", "/quiet", "/norestart"])
+            os.remove("nodejs_installer.msi")
+        else:
+            raise ValueError("Unsupported platform.")
+    else:
+        print("node.js is already installed.")
+
+
+def install_mongodb() -> None:
+    """
+    Install MongoDB if it's not already installed.
+
+    Returns:
+        None
+    """
+    if not shutil.which("mongo") and not shutil.which("mongod"):
+        print("Installing MongoDB...")
+
+        if sys.platform == "darwin":
+            run_command(["brew", "tap", "mongodb/brew"])
+            run_command(["brew", "install", "mongodb-community"])
+            run_command(["brew", "services", "restart", "mongodb/brew/mongodb-community"])
+            hasUsedBrew = True
+        elif sys.platform == "linux":
+            # Check for admin privileges
+            if not is_admin():
+                elevate_privileges_windows()
+            run_command(["wget", "-qO", "-", "https://www.mongodb.org/static/pgp/server-5.0.asc", "|", "sudo", "apt-key", "add", "-"])
+            run_command(["echo", "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse", "|", "sudo", "tee", "/etc/apt/sources.list.d/mongodb-org-5.0.list"])
+            run_command(["sudo", "apt-get", "update"])
+            run_command(["sudo", "apt-get", "install", "-y", "mongodb-org"])
+        elif sys.platform == "win32":
+            import requests
+            # Check for admin privileges
+            if not is_admin():
+                elevate_privileges_windows()
+            mongodb_url = "https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-5.0.6-signed.msi"
+            response = requests.get(mongodb_url)
+            with open("mongodb_installer.msi", "wb") as file:
+                file.write(response.content)
+
+            print("Installing MongoDB...")
+            run_command(["msiexec", "/i", "mongodb_installer.msi", "/quiet", "/norestart", "INSTALLLOCATION=C:\\Program Files\\MongoDB\\Server\\5.0\\"])
+            os.remove("mongodb_installer.msi")
+        else:
+            raise ValueError("Unsupported platform.")
+    else:
+        print("MongoDB is already installed.")
+
+# Elevate User Privilages (if required)
 def elevate_privileges_linux() -> None:
     """Elevate privileges on Linux using pkexec."""
     os.execvp('pkexec', ['pkexec', sys.executable] + sys.argv)
@@ -26,9 +178,6 @@ def elevate_privileges_macos() -> None:
     osascript_cmd = f'do shell script "{script}" with administrator privileges'
     subprocess.run(['osascript', '-e', osascript_cmd])
     sys.exit(0)
-
-
-
 
 def elevate_privileges_windows() -> None:
     """Elevate privileges on Windows using ctypes and pywin32."""
@@ -62,200 +211,54 @@ def elevate_privileges() -> None:
         print(f"Error: Unsupported operating system ({host_os}).")
         sys.exit(1)
 
+def is_admin() -> bool:
+    """Check if the current user is an administrator."""
+    if sys.platform == "win32":
+        try:
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except AttributeError:
+            return False
+    else:
+        return os.getuid() == 0
 
-def create_partition_linux(size_bytes: int) -> None:
-    """Create a new ext4 partition on Linux.
-
-    Args:
-        size_bytes: The size of the partition in bytes.
+def npm_install(app_path) -> None:
     """
-    print("Creating partition on Linux...")
+    Install the required npm packages.
 
-    # Check for required tools
-    for cmd in ['parted', 'mkfs.ext4', 'mkdir']:
-        if not shutil.which(cmd):
-            raise PartitionError(f"{cmd} is not installed.")
-
-    # Replace /dev/sda with the target disk device
-    target_disk = '/dev/sda'
-
-    # Convert size_bytes to a percentage of the disk size for parted
-    disk_size_bytes = int(subprocess.check_output(['blockdev', '--getsize64', target_disk]))
-    size_percentage = (size_bytes / disk_size_bytes) * 100
-
-    # Create partition using parted
-    subprocess.run(['parted', target_disk, 'mklabel', 'gpt'], check=True)
-    subprocess.run(['parted', target_disk, 'mkpart', 'MyCloudDrive', 'ext4', '0%', f'{size_percentage}%'], check=True)
-
-    # Format partition with ext4
-    subprocess.run(['mkfs.ext4', f'{target_disk}1'], check=True)
-
-    # Mount the partition
-    mount_point = '/mnt/MyCloudDrive'
-    os.makedirs(mount_point)
-    subprocess.run(['mount', f'{target_disk}1', mount_point], check=True)
-
-
-def create_partition_macos(size_bytes: int) -> None:
-    """Create a new APFS partition on macOS.
-
-    Args:
-        size_bytes: The size of the partition in bytes.
+    Returns:
+        None
     """
-    print("Creating new partition on macOS...")
+    # First, check if node_modules exists if so, skip this
+    if not os.path.exists(os.path.join(app_path, "node_modules")):
+        print("Installing npm packages...")
+        # run_command(["npm", "install"])
+        print("npm packages installed.")
+    else:
+        print("npm packages are already installed.")
+        return
 
-    # Check for required tools
-    if not shutil.which('diskutil'):
-        raise PartitionError("diskutil is not installed.")
-
-    # Get the target disk identifier
-    diskutil_output = subprocess.check_output(['diskutil', 'list'], text=True)
-    target_disk = None
-    for line in diskutil_output.splitlines():
-        if 'internal' in line and 'physical' in line:
-            target_disk = line.split()[0]
-            break
-
-    if not target_disk:
-        raise PartitionError("Internal physical disk not found.")
-
-    # Convert size_bytes to size_gib for diskutil
-    size_gib = size_bytes / (1024 ** 3)
-
-    # Create APFS volume
-    subprocess.run(['diskutil', 'apfs', 'addVolume', target_disk, 'APFS', 'MyCloudDrive', f'-size={size_gib}g'], check=True)
-
-
-def create_partition_windows(size_bytes: int) -> None:
-    """Create a new NTFS partition on Windows.
-
-    Args:
-        size_bytes: The size of the partition in bytes.
-    """
-    print("Creating partition on Windows...")
-
-    # Check for required tools
-    if not shutil.which('diskpart'):
-        raise PartitionError("diskpart is not installed.")
-
-    # Convert size_bytes to size_mb for diskpart
-    size_mb = size_bytes / (1024 ** 2)
-
-    # Diskpart script to create a new partition and assign a drive letter
-    diskpart_script = f'''
-select disk 0
-create partition primary size={size_mb}
-format fs=ntfs quick
-assign
-active
-exit
-'''
-
-    # Run diskpart with the script
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_script:
-        temp_script.write(diskpart_script)
-        temp_script.flush()
-
-    subprocess.run([f'"{sys.executable}"', '/s', f'"{temp_script.name}"'], check=True)
-
-
-def remove_partition_linux() -> None:
-    """Remove the ext4 partition on Linux."""
-    print("Removing partition on Linux...")
-
-    target_disk = '/dev/sda1'  # Replace with the correct partition name
-    mount_point = '/mnt/MyCloudDrive'
-
-    # Unmount the partition
-    subprocess.run(['umount', mount_point], check=True)
-
-    # Remove partition using parted
-    subprocess.run(['parted', '/dev/sda', 'rm', '1'], check=True)
-
-
-def remove_partition_macos() -> None:
-    """Remove the APFS partition on macOS."""
-    print("Removing partition on macOS...")
-
-    # Find the APFS volume
-    diskutil_output = subprocess.check_output(['diskutil', 'list'], text=True)
-    volume_info = [line for line in diskutil_output.splitlines() if 'MyCloudDrive' in line]
-
-    if not volume_info:
-        raise PartitionError("MyCloudDrive not found.")
-
-    target_volume = volume_info[0].split()[-1]
-
-    # Remove the APFS volume
-    subprocess.run(['diskutil', 'apfs', 'deleteVolume', target_volume], check=True)
-
-
-def remove_partition_windows() -> None:
-    """Remove the NTFS partition on Windows."""
-    print("Removing partition on Windows...")
-
-    # Find the target volume
-    wmic_output = subprocess.check_output(['wmic', 'logicaldisk', 'get', 'name,volumename'], text=True)
-    target_volume = [line.split(':')[0] for line in wmic_output.splitlines() if 'MyCloudDrive' in line]
-
-    if not target_volume:
-        raise PartitionError("MyCloudDrive not found.")
-
-    # Diskpart script to remove the partition
-    diskpart_script = f'''
-                    select volume {target_volume[0]}
-                    delete volume
-                    exit
-                    '''
-        # Run diskpart with the script
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_script:
-        temp_script.write(diskpart_script)
-        temp_script.flush()
-
-    subprocess.run(['diskpart', '/s', temp_script.name], check=True)
-
+def script_is_standalone() -> bool:
+    """Check if the script is being run as a standalone executable."""
+    return getattr(sys, 'frozen', False)
 
 def main() -> None:
-    """Parse command-line arguments, elevate privileges, and create or remove the partition."""
-    parser = argparse.ArgumentParser(description="Create or remove a partition named 'MyCloudDrive'")
-    parser.add_argument('action', choices=['create', 'remove'], help='action to perform (create or remove)')
-    parser.add_argument('--size', type=int, help='size of the partition in bytes (for create action)')
+    """
+    The main function that runs the environment setup process.
 
-    args = parser.parse_args()
+    Returns:
+        None
+    """
+    print("Setting up environment, Please be patient...")
+    if sys.platform == "darwin":
+        install_homebrew()
 
-    if args.action == 'create' and not args.size:
-        parser.error("the '--size' argument is required when creating a partition")
+    install_nodejs()
+    install_mongodb()
 
-    if os.geteuid() != 0:
-        print("Requesting administrator/root privileges...")
-        elevate_privileges()
+    if sys.platform == "darwin" and hasUsedBrew:
+        brew_cleanup()
 
-    host_os = platform.system()
-
-    try:
-        if host_os == 'Linux':
-            if args.action == 'create':
-                create_partition_linux(args.size)
-            else:
-                remove_partition_linux()
-        elif host_os == 'Darwin':
-            if args.action == 'create':
-                create_partition_macos(args.size)
-            else:
-                remove_partition_macos()
-        elif host_os == 'Windows':
-            if args.action == 'create':
-                create_partition_windows(args.size)
-            else:
-                remove_partition_windows()
-        else:
-            raise PartitionError(f"Unsupported operating system ({host_os}).")
-
-        print(f"Partition 'MyCloudDrive' {args.action}d successfully.")
-
-    except (subprocess.CalledProcessError, PartitionError) as e:
-        print(f"Error: {str(e)}")
-        sys.exit(1)
+    print("Environment setup complete.")
 
 
 if __name__ == '__main__':

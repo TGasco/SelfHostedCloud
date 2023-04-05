@@ -1,0 +1,34 @@
+{
+    "users": {
+        "userName": "string",
+        "userPass": "string",
+        "userDefaults": {
+            "baseDir": "string",
+            "lastSync": "date",
+            "totalStorageUsed": 0,
+            "totalStorage": 0,
+            "preferences": {
+                "theme": {
+                    "prefString": "Theme",
+                    "prefOptions": ["light", "dark"], "prefValue": "light"},
+                "showFileExtensions": {
+                    "prefString": "Show File Extensions",
+                    "prefOptions": [true, false],
+                    "prefValue": false  }
+            }
+        }
+    },
+    "files": {
+        "fileName": "string",
+        "fileExt": "string",
+        "dirPath": "string",
+        "fileSize": "number",
+        "lastModified": "date",
+        "lastViewed": "date",
+        "uploadDate": "date",
+        "isFavourited": "boolean",
+        "isDirectory": "boolean",
+        "isShared": "boolean",
+        "fileOwner": "string"
+      }
+}

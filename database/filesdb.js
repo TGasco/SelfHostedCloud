@@ -6,27 +6,11 @@ import fs from 'fs';
 import archiver from 'archiver';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname } from 'path';
-import { InsertDocument, QueryCollection, UpdateDocument } from './dbops.js';
+import { InsertDocument, QueryCollection, UpdateDocument, GetDBSchema, getDefaultAttributeValue, RemoveDocument } from './dbops.js';
 // Define the MongoDB connection URI
 const uri = "mongodb://127.0.0.1:27017"
 const dbName = "MyCloudDrive";
 const collectionName = "files";
-
-// Define the file metadata schema
-const fileSchema = {
-  fileName: String,
-  fileExt: String,
-  fileFize: Number,
-  lastModified: Date,
-  filePath: String,
-  lastViewed: Date,
-  isFavourited: Boolean,
-  isDirectory: Boolean,
-  uploadDate: Date
-};
-
-// Create a model for the file metadata
-const File = mongoose.model("files", fileSchema, collectionName);
 
 async function GetDocumentsWithRoot(root, deep=false) {
   if (deep) {
@@ -38,40 +22,26 @@ async function GetDocumentsWithRoot(root, deep=false) {
   return QueryCollection(query, collectionName);
 }
 
-async function walkDir(dir) {
-  const files = await new Promise((resolve, reject) => {
-    fs.readdir(dir, (error, files) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(files);
-    });
-  });
+async function GetAllUserFiles(userId) {
+  return QueryCollection({ fileOwner: userId }, collectionName);
+}
 
-  const promises = files.filter((file) => {
-    return !file.startsWith('.'); // Ignores hidden files
-  }).map(async (file) => {
-    const filePath = path.join(dir, file);
-    const stat = await new Promise((resolve, reject) => {
-      fs.stat(filePath, (error, stat) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(stat);
-      });
-    });
-
-    if (stat.isDirectory()) {
-      const subFiles = await walkDir(filePath);
-      return { dir: filePath, files: subFiles };
-    } else {
-      return filePath;
+async function walkDir(dir, callback) {
+  const files = await fs.promises.readdir(dir);
+  for (const file of files) {
+    if (file.startsWith('.')) {
+      continue; // Skip hidden files and directories
     }
-  });
 
-  return Promise.all(promises);
+    const filepath = path.join(dir, file);
+    const stats = await fs.promises.stat(filepath);
+
+    callback(filepath);
+
+    if (stats.isDirectory()) {
+      await walkDir(filepath, callback);
+    }
+  }
 }
 
 function getFileMetadata(filePath, callback) {
@@ -108,8 +78,8 @@ function getFileMetadata(filePath, callback) {
         lastModified = stats.mtime;
         lastViewed = stats.atime;
         uploadDate = stats.birthtime;
-
-        resolve({
+        const schema = GetDBSchema(collectionName);
+        const fileData = {
           "fileName": fileName,
           "fileExt": fileExt,
           "dirPath": dirPath,
@@ -119,7 +89,17 @@ function getFileMetadata(filePath, callback) {
           "uploadDate": uploadDate,
           "isFavourited": isFavourited,
           "isDirectory": isDirectory,
-        });
+        }
+        // iterate over each schema element, and set its value to the corresponding key in the fileData object
+        for (const [key, value] of Object.entries(schema)) {
+          if (key in fileData) {
+            schema[key] = fileData[key];
+          } else {
+            schema[key] = getDefaultAttributeValue(value);
+          }
+
+        }
+        resolve(schema);
       }
     });
   })
@@ -147,17 +127,31 @@ function isDir(path) {
   }
 }
 
-function ExpandDir(dirPath) {
-  // Directory!
-  if (typeof dirPath === 'object') {
-    getFileMetadata(dirPath.dir).then(metadata => {InsertDocument(metadata, collectionName)});
-    for (let j = 0; j < dirPath.files.length; j++) {
-      ExpandDir(dirPath.files[j]);
-    }
-  } else {
-    getFileMetadata(dirPath).then(metadata => {InsertDocument(metadata, collectionName)});
-  }
-}
+// function ExpandDir(dirPath, userId) {
+//   // Directory!
+//   if (typeof dirPath === 'object') {
+//     try {
+//       fs.promises.access(dirPath);
+//     } catch (err) {
+//       getFileMetadata(dirPath.dir).then(metadata => {
+//         metadata.fileOwner = userId;
+//         InsertDocument(metadata, collectionName)
+//       });
+//     }
+//     for (let j = 0; j < dirPath.files.length; j++) {
+//       ExpandDir(dirPath.files[j]);
+//     }
+//   } else {
+//     try {
+//       fs.promises.access(dirPath);
+//     } catch (err) {
+//       getFileMetadata(dirPath).then(metadata => {
+//         metadata.fileOwner = userId;
+//         InsertDocument(metadata, collectionName);
+//       });
+//     }
+//   }
+// }
 
 function ZipDir(source, callback) {
   const target = source + '.zip';
@@ -190,13 +184,37 @@ function ZipDir(source, callback) {
   });
 }
 
-function InsertFilesystem(dir) {
-  walkDir(dir).then(files => {
-    for (let i = 0; i < files.length; i++) {
-      if (typeof files[i] === 'object') {
-        ExpandDir(files[i]);
-      } else {
-        getFileMetadata(files[i]).then(metadata => {InsertDocument(metadata, collectionName)});
+async function InsertFilesystem(dir, userId) {
+  walkDir(dir, (filePath) => {
+    // Check if the file exists in the database)
+    const dirName = dirname(filePath);
+    const fileExt = extname(filePath);
+    const baseName = basename(filePath, fileExt);
+    const query = { dirPath: dirName, fileName: baseName, fileExt: fileExt, fileOwner: userId };
+    QueryCollection(query, collectionName).then(result => {
+      if (result.length == 0) {
+        getFileMetadata(filePath).then(metadata => {
+          metadata.fileOwner = userId;
+          InsertDocument(metadata, collectionName);
+        });
+      }
+    });
+  });
+}
+
+async function SyncDBWithFilesystem(dir, userId) {
+  console.log("Syncing database with filesystem...");
+  // Walk over the filesystem and insert any new files
+  await InsertFilesystem(dir, userId);
+  // Check for any files that have been deleted and remove them from the database
+  await GetAllUserFiles(userId).then(async documents => {
+    for (let i = 0; i < documents.length; i++) {
+      const filePath = path.join(documents[i].dirPath, documents[i].fileName + documents[i].fileExt);
+      try {
+        await fs.promises.access(filePath);
+      } catch (err) {
+        console.log("Deleting " + filePath);
+        RemoveDocument(documents[i], collectionName);
       }
     }
   });
@@ -248,4 +266,21 @@ async function RenameFile(file, newName) {
   }
 }
 
-export { GetDocumentsWithRoot, walkDir, InsertFilesystem, RenameFile, ZipDir, getFileMetadata};
+async function CreateDirectoryIfNotExists(directoryPath) {
+  try {
+    // Check if the directory exists
+    await fs.promises.access(directoryPath);
+    console.log(`Directory '${directoryPath}' already exists.`);
+  } catch (error) {
+    // If the directory does not exist, create it
+    if (error.code === 'ENOENT') {
+      await fs.promises.mkdir(directoryPath, { recursive: true });
+      console.log(`Directory '${directoryPath}' has been created.`);
+    } else {
+      console.error('Error while checking directory existence:', error);
+      throw error;
+    }
+  }
+}
+
+export { GetDocumentsWithRoot, InsertFilesystem, RenameFile, ZipDir, getFileMetadata, CreateDirectoryIfNotExists, SyncDBWithFilesystem };

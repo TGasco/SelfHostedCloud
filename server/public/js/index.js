@@ -2,8 +2,10 @@ import { BytesToSize, ConvertDate } from './helperfuncs.js';
 
 // Store the current directory
 let currDir = null;
+let moveCurrDir = null;
 let userPreferences;
 let username;
+let baseDir;
 /**
  * Initialize the grid view with the files and folders at the given path.
  * @param {string} path - The path to display in the grid view.
@@ -20,6 +22,12 @@ async function init_grid(path, documents = null) {
 
   const currDirElement = document.getElementById("curr-dir");
 
+  const backBtn = document.getElementById("back-btn");
+  if (path === baseDir) {
+    backBtn.classList.add("hidden");
+  } else {
+    backBtn.classList.remove("hidden");
+  }
 
   // Create a document fragment to hold the grid items
   const gridFragment = document.createDocumentFragment();
@@ -49,6 +57,10 @@ async function init_grid(path, documents = null) {
       oldGrid.replaceWith(emptyMessage);
       // newGrid.appendChild(emptyMessage);
     } else {
+      // Sort the files
+      const sortBtn = document.getElementById("sort-btn");
+      if (sortBtn.classList.contains("sort-asc")) files = SortFiles(files, "fileName", true);
+      else files = SortFiles(files, "fileName", false);
       // Create an array of promises for creating grid items
       const iconPromises = files.map((file, i) => createGridItem(file, i, gridFragment));
 
@@ -57,10 +69,13 @@ async function init_grid(path, documents = null) {
 
       // Append the document fragment to the new grid
       newGrid.appendChild(gridFragment);
+
+      // Only replace the grid if the new grid is different from the old grid
+      if (!oldGrid.isEqualNode(newGrid)) {
+        oldGrid.replaceWith(newGrid);
+      }
     }
 
-    // Replace the old grid with the new grid
-    oldGrid.replaceWith(newGrid);
 
     if (!documents) {
       // Update the current directory on the server
@@ -78,6 +93,32 @@ async function init_grid(path, documents = null) {
   }
 }
 
+/**
+ * Sorts a list of files based on the provided attribute and order.
+ * @param {Array} files - The list of files to sort.
+ * @param {string} sortBy - The attribute to sort by: 'fileName', 'fileExt', 'fileSize', or 'lastViewed'.
+ * @param {boolean} [ascending=true] - Whether to sort in ascending order (true) or descending order (false).
+ * @return {Array} The sorted list of documents */
+function SortFiles(files, sortBy, ascending = true) {
+  // Copy the input array to avoid modifying the original
+  const sortedFiles = [...files];
+
+  // Define a custom comparison function for each sort option
+  const compareFunctions = {
+    fileName: (a, b) => a.fileName.localeCompare(b.fileName),
+    fileExt: (a, b) => a.fileExt.localeCompare(b.fileExt),
+    fileSize: (a, b) => a.fileSize - b.fileSize,
+    lastViewed: (a, b) => a.lastViewed.getTime() - b.lastViewed.getTime(),
+  };
+
+  // Get the appropriate comparison function based on the sortBy parameter
+  const compareFunction = compareFunctions[sortBy];
+
+  // Sort the files using the selected comparison function
+  sortedFiles.sort((a, b) => ascending ? compareFunction(a, b) : -compareFunction(a, b));
+
+  return sortedFiles;
+}
 
 /**
  * Initialize the favourite list view with the user's favourite files and folders.
@@ -88,6 +129,7 @@ async function init_favourite_list() {
   // Create a temporary list element
   const newFavList = document.createElement("ul");
   newFavList.id = "favourites-list";
+  newFavList.className = "sidebar-list";
 
   // Create a document fragment to hold the list items
   const favFragment = document.createDocumentFragment();
@@ -120,6 +162,93 @@ async function init_favourite_list() {
   } catch (error) {
     console.error("Error fetching favourites:", error);
   }
+}
+
+async function init_move_list(path) {
+  // Get the documents in the current directory
+  moveCurrDir = path;
+
+  const onClickListener = async (file) => {
+    const filePath = file.isDirectory ? file.dirPath + "/" + file.fileName : file.dirPath;
+    if (filePath !== moveCurrDir) {
+      init_move_list(filePath);
+    }
+  };
+
+  let documents = await fetchFilesMetadata(path);
+  documents = SortFiles(documents, "fileExt");
+  init_list_view(documents, "move-list", onClickListener);
+  // Update the current directory
+}
+
+async function init_list_view(documents, elementId, onClickListener) {
+  const oldList = document.getElementById(elementId);
+
+  // Create a temporary list element
+  const newList = document.createElement("ul");
+  newList.id = elementId;
+  newList.className = "sidebar-list";
+
+  // Create a document fragment to hold the list items
+  const documentFragment = document.createDocumentFragment();
+
+  try {
+    if (documents.length === 0) {
+      // Display a message if there are no documents
+      const fav = document.createElement("p");
+      fav.className = "sidebar-item";
+      const text = document.createElement("span");
+      text.textContent = "No documents!";
+      text.className = "fav-text";
+      fav.appendChild(text);
+      documentFragment.appendChild(fav);
+    } else {
+      // Create an array of promises for creating favourite items
+      const favPromises = documents.map((file, i) => createItem(file, i, documentFragment, onClickListener.bind(null, file)));
+
+      // Wait for all the promises to resolve
+      await Promise.all(favPromises);
+    }
+
+    // Append the document fragment to the new list
+    newList.appendChild(documentFragment);
+
+    // Replace the old list with the new list
+    oldList.replaceWith(newList);
+  } catch (error) {
+    console.error("Error fetching documents:", error);
+  }
+}
+
+async function createItem(file, i, documentFragment, onClickListener = null) {
+  return new Promise(async (resolve) => {
+    const doc = document.createElement("li");
+    doc.className = "sidebar-item fav-item";
+
+    const img = document.createElement("img");
+    img.src = GetFileIcon(file);
+    img.className = "fav-img";
+    doc.appendChild(img);
+
+    const text = document.createElement("p");
+    text.textContent = file.fileName;
+    text.className = "fav-text";
+    doc.appendChild(text);
+
+    if (file.isDirectory) {
+      const arrow = document.createElement("i");
+      arrow.className = "dir-arrow fa fa-angle-right";
+      arrow.style = "position: absolute; right: 10px; "
+      doc.appendChild(arrow);
+    }
+
+    if (onClickListener) {
+      doc.addEventListener("click", onClickListener);
+    }
+
+    documentFragment.appendChild(doc);
+    resolve();
+  });
 }
 
 async function init_preferences() {
@@ -158,7 +287,7 @@ function createPrefItem(pref, i, prefFragment) {
     const [key, value] = pref;
     const prefValue = value.prefValue;
     const prefItem = document.createElement("li");
-    prefItem.className = "sidebar-item preference-item";
+    prefItem.className = "sidebar-item pref-item";
 
     const prefName = document.createElement("p");
     prefName.textContent = value.prefString;
@@ -320,7 +449,6 @@ async function SearchForFiles(searchTerm) {
     }
 
     const files = await response.json();
-    console.log(files);
     return files;
   } catch (error) {
     console.error("Error fetching search results:", error);
@@ -464,7 +592,7 @@ function createFavItem(file, i, favFragment) {
     img.className = "fav-img";
     fav.appendChild(img);
 
-    const text = document.createElement("span");
+    const text = document.createElement("p");
     text.textContent = file.fileName;
     text.className = "fav-text";
     fav.appendChild(text);
@@ -512,20 +640,40 @@ function GetFileIcon(file) {
 
 
 // Event Listeners
-const addBackBtnClickListener = () => {
-  document.getElementById("back-btn").addEventListener("click", async () => {
-    const currDir = await getCurrentDir();
-    const baseDir = await fetch("/basedir", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      }
-    }).then((response) => response.text());
+const addBackBtnClickListener = (backBtn) => {
+  backBtn.addEventListener("click", async () => {
+    const baseDir = await getCurrentDir();
 
     if (currDir !== baseDir) {
       const prevDir = await GetPreviousDir(currDir);
+      if (backBtn.classList.contains("hidden")) {
+        backBtn.classList.remove("hidden");
+      }
       init_grid(prevDir);
+    } else {
+      if (!backBtn.classList.contains("hidden")) {
+        console.log("You are already in the base directory.");
+        backBtn.classList.add("hidden");
+      }
+    }
+  });
+};
+
+const addMoveBackBtnClickListener = (backBtn) => {
+  backBtn.addEventListener("click", async () => {
+    const baseDir = await getCurrentDir();
+
+    if (moveCurrDir !== baseDir) {
+      const prevDir = await GetPreviousDir(moveCurrDir);
+      // if (backBtn.classList.contains("hidden")) {
+      //   backBtn.classList.remove("hidden");
+      // }
+      init_move_list(prevDir);
+    } else {
+      // if (!backBtn.classList.contains("hidden")) {
+      //   console.log("You are already in the base directory.");
+      //   backBtn.classList.add("hidden");
+      // }
     }
   });
 };
@@ -542,6 +690,9 @@ const eventListeners = {
   hideDeleteConfirmListener: null,
   deleteFileListener: null,
   favouriteFileListener: null,
+  showMoveFileListener: null,
+  hideMoveFileListener: null,
+  moveFileListener: null,
 };
 
 // Event Listener Utility Functions
@@ -589,7 +740,10 @@ const addEventListenerAndStore = (elementId, eventType, listenerKey, listenerFn)
 
 // Event listener setup
 const setupEventListeners = () => {
-  addBackBtnClickListener();
+  const backBtn = document.getElementById("back-btn");
+  const moveBackBtn = document.getElementById("move-back-btn");
+  addBackBtnClickListener(backBtn);
+  addMoveBackBtnClickListener(moveBackBtn);
 };
 
 // Call setupEventListeners on script load
@@ -599,9 +753,10 @@ var showUserPanel = (e) => {
   e.preventDefault();
   e.stopPropagation();
   const userPanel = document.getElementById("user-panel");
-  userPanel.style.opacity = 1;
-  userPanel.style.transform = "scale(1)";
   userPanel.classList.remove("hidden");
+  setTimeout(() => {
+    userPanel.style.opacity = 1;
+  }, 0);
   document.addEventListener("click", function hideUserPanelListener(ev) {
     if (!userPanel.contains(e.target)) {
       hideUserPanel(ev);
@@ -613,8 +768,9 @@ var showUserPanel = (e) => {
 var hideUserPanel = (e) => {
   const userPanel = document.getElementById("user-panel");
   userPanel.style.opacity = 0;
-  userPanel.style.transform = "scale(0)";
-  userPanel.classList.add("hidden");
+  setTimeout(() => {
+    userPanel.classList.add("hidden");
+  }, 200);
 };
 
 var toggleUserPanel = (e) => {
@@ -702,40 +858,49 @@ var hideDeleteConfirm = (e, file) => {
 // Show file info panel
 const showFileInfo = (e, file) => {
   e.preventDefault();
-  removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
+  e.stopPropagation();
+  // removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
 
   // Show the file info panel here, populate it with file info
   const fileInfo = document.getElementById("file-info-modal");
+  const fileInfoTitle = fileInfo.querySelectorAll(".file-info-title")[0];
   const fileInfoItems = fileInfo.querySelectorAll(".file-info-item");
   fileInfo.classList.remove("hidden");
-  fileInfo.classList.add(file._id);
+  // fileInfo.classList.add(file._id);
   setTimeout(() => {
     fileInfo.style.opacity = 1;
-  }, 100);
-  fileInfoItems[0].innerHTML = file.fileName;
-  fileInfoItems[2].innerHTML = "Size: " + BytesToSize(file.fileSize);
+  }, 0);
+  fileInfoTitle.innerHTML = file.fileName;
+  fileInfoItems[1].innerHTML = "Size: " + BytesToSize(file.fileSize);
   if (file.isDirectory) {
-    fileInfoItems[3].innerHTML = "Type: Folder";
+    fileInfoItems[2].innerHTML = "Type: Folder";
   } else {
-    fileInfoItems[3].innerHTML = "Type: " + file.fileExt;
+    fileInfoItems[2].innerHTML = "Type: " + file.fileExt;
   }
-  fileInfoItems[4].innerHTML = "Last Modified: " + ConvertDate(file.lastModified);
-  fileInfoItems[5].innerHTML = "Uploaded: " + ConvertDate(file.uploadDate);
-  fileInfoItems[6].innerHTML = "Favourite: " + file.isFavourited;
+  fileInfoItems[3].innerHTML = "Last Modified: " + ConvertDate(file.lastModified);
+  fileInfoItems[4].innerHTML = "Uploaded: " + ConvertDate(file.uploadDate);
+  fileInfoItems[5].innerHTML = "Favourite: " + file.isFavourited;
 
-  const hideFileInfoListener = (e) => hideFileInfo(e, file);
-  addEventListenerAndStore("close-file-info", "click", "hideFileInfo", hideFileInfoListener);
+  window.addEventListener("click", hideFileInfo);
+  // const hideFileInfoListener = (e) => hideFileInfo(e, file);
+  // addEventListenerAndStore("close-file-info", "click", "hideFileInfo", hideFileInfoListener);
 };
 
 // Hide file info panel
 const hideFileInfo = (e, file) => {
+  console.log(e.target);
   const fileInfo = document.getElementById("file-info-modal");
-  fileInfo.style.opacity = 0;
-  setTimeout(function() {
-    fileInfo.classList.remove(file._id);
-    fileInfo.classList.add("hidden");
-  }, 250);
-  removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
+  const fileInfoItem = document.getElementById("file-info");
+  if (e.target !== fileInfo && e.target !== fileInfoItem) {
+    console.log("clicked outside!");
+    fileInfo.style.opacity = 0;
+    setTimeout(function() {
+      // fileInfo.classList.remove(file._id);
+      fileInfo.classList.add("hidden");
+    }, 100);
+    // removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
+    window.removeEventListener("click", hideFileInfo);
+  }
 };
 
 
@@ -754,13 +919,12 @@ var favouriteFile = (e, file) => {
   });
 };
 
-var renameFile = (e, file) => {
+const renameFile = (e, file) => {
   const fileElement = document.getElementById(file._id);
   const fileName = fileElement.getElementsByClassName("grid-filename")[0];
   const editFileInputField = document.getElementById("edit-filename");
-
-  editFileInputField.value = fileName.innerHTML;
-  editFileInputField.style.display = "block";
+  editFileInputField.classList.remove("hidden");
+  editFileInputField.value = fileName.textContent;
   editFileInputField.style.left = fileName.offsetParent.offsetLeft + fileName.offsetLeft + "px";
   editFileInputField.style.top = fileName.offsetParent.offsetTop + fileName.offsetTop + "px";
 
@@ -768,13 +932,15 @@ var renameFile = (e, file) => {
   // editFileInputField.style.width = width + "px";
   editFileInputField.focus();
   editFileInputField.select();
+  fileName.classList.add("hidden");
 
 
 
   var hideInputField = (e) => {
     const renameItem = document.getElementById("rename-file");
     if (e.target !== editFileInputField && e.target !== fileName && e.target !== renameItem) {
-      editFileInputField.style.display = "none";
+      fileName.classList.remove("hidden");
+      editFileInputField.classList.add("hidden");
       console.log("clicked outside!");
       editFileInputField.removeEventListener("keydown", keyEnterEvent);
       window.removeEventListener("click", hideInputField);
@@ -812,7 +978,34 @@ var renameFile = (e, file) => {
   window.addEventListener("click", hideInputField);
 }
 
+const moveFile = async (e, file) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const moveFileContainer = document.getElementById("move-file-container");
+  moveFileContainer.style.opacity = 0;
+  setTimeout(function() {
+    moveFileContainer.classList.add("hidden");
+  }, 150);
 
+  const result = await fetch("/file-move", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + localStorage.getItem("token"),
+    },
+    body: JSON.stringify({
+      fileId: file._id,
+      newPath: moveCurrDir
+    })
+  });
+
+  if (result.status === 200) {
+    console.log("file moved!");
+    return init_grid(currDir);
+  } else {
+    console.log("file move failed!");
+  }
+};
 
 const showContextMenu = async (e, file) => {
   e.preventDefault();
@@ -831,6 +1024,9 @@ const showContextMenu = async (e, file) => {
 
   removeEventListenerIfExists("favourite-file", "click", "favouriteFileListener");
   addEventListenerAndStore("favourite-file", "click", "favouriteFileListener", favouriteFile.bind(null, e, file));
+
+  removeEventListenerIfExists("move-file", "click", "showMoveFileListener");
+  addEventListenerAndStore("move-file", "click", "showMoveFileListener", showMoveFile.bind(null, e, file));
 
   const favouriteItem = document.getElementById("favourite-file");
   const res = await fetch("/isfavourited?fileId=" + file._id, {
@@ -865,6 +1061,30 @@ const showContextMenu = async (e, file) => {
 
   removeEventListenerIfExists(null, "click", "hideContextMenuListener");
   addEventListenerAndStore(null, "click", "hideContextMenuListener", hideContextMenu.bind(null, e, file));
+};
+
+const showMoveFile = (e, file) => {
+  const moveFileContainer = document.getElementById("move-file-container");
+
+  // Show move file container
+  moveFileContainer.classList.remove("hidden");
+  moveFileContainer.style.opacity = 1;
+
+  // Add event listener to move button
+  removeEventListenerIfExists("move-btn", "click", "moveFileListener");
+  addEventListenerAndStore("move-btn", "click", "moveFileListener", moveFile.bind(null, e, file));
+
+  // Add event listener to cancel button
+  removeEventListenerIfExists("move-cancel-btn", "click", "hideMoveFileListener");
+  addEventListenerAndStore("move-cancel-btn", "click", "hideMoveFileListener", hideMoveFile.bind(null, e));
+};
+
+const hideMoveFile = (e) => {
+  const moveFileContainer = document.getElementById("move-file-container");
+  moveFileContainer.style.opacity = 0;
+  setTimeout(function() {
+    moveFileContainer.classList.add("hidden");
+  }, 200);
 };
 
 /**
@@ -908,6 +1128,10 @@ const uploadFiles = async (files) => {
   const filePaths = [];
 
   for (const file of files) {
+    // Ingore .DS_Store files
+    if (file.name === ".DS_Store") {
+     continue;
+    }
     console.log(file);
     formData.append("files", file);
     if (file.webkitRelativePath) {
@@ -935,7 +1159,6 @@ const uploadFiles = async (files) => {
 
 const fileSearch = async (e) => {
   const searchQuery = e.target.value;
-  console.log(searchQuery);
   if (searchQuery.length > 0) {
     const res = await SearchForFiles(searchQuery);
     init_grid(null, res);
@@ -944,7 +1167,25 @@ const fileSearch = async (e) => {
   }
 };
 
+const toggleSort = async () => {
+  const sortBtn = document.getElementById("sort-btn");
+  if (sortBtn.classList.contains("sort-asc")) {
+    sortBtn.classList.remove("sort-asc");
+    sortBtn.classList.remove("fa-arrow-down-wide-short");
+    sortBtn.classList.add("sort-desc");
+    sortBtn.classList.add("fa-arrow-up-wide-short");
+  } else {
+    sortBtn.classList.remove("sort-desc");
+    sortBtn.classList.remove("fa-arrow-up-wide-short");
+    sortBtn.classList.add("sort-asc");
+    sortBtn.classList.add("fa-arrow-down-wide-short");
+  }
+  init_grid(currDir);
+};
+
 document.getElementById("search-input").addEventListener("input", fileSearch);
+
+document.getElementById("sort-btn").addEventListener("click", toggleSort);
 
 const dropZone = document.getElementById("drop-zone");
 
@@ -982,6 +1223,33 @@ document.getElementById("user-btn").addEventListener("click", (e) => {toggleUser
 
 document.getElementById("user-panel-logout").addEventListener("click", logout);
 
+let focusTriggered = false;
+
+function handleFocus() {
+  if (!focusTriggered) {
+    focusTriggered = true;
+    LoadPage();
+  }
+}
+
+function handleBlur() {
+  focusTriggered = false;
+}
+
+function handleVisibilityChange() {
+  if (!document.hidden) {
+    handleFocus();
+  } else {
+    handleBlur();
+  }
+}
+
+// Add the event listeners for the 'focus', 'blur', and 'visibilitychange' events
+window.addEventListener('focus', handleFocus);
+window.addEventListener('blur', handleBlur);
+document.addEventListener('visibilitychange', handleVisibilityChange);
+
+
 document.addEventListener('DOMContentLoaded', function () {
   const sidebarToggle = document.getElementById('menu-btn');
   const sidebar = document.getElementById('sidebar');
@@ -1011,17 +1279,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 var getCurrentDir = async () => {
-  if (currDir == null) {
-    const result = await fetch("/basedir", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + localStorage.getItem("token"),
-      }
-    }).then((res) => res.text());
-    currDir = result;
-  }
-  return currDir;
+  const result = await fetch("/basedir", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + localStorage.getItem("token"),
+    }
+  }).then((res) => res.text());
+  return result;
+}
+
+var getMoveCurrDir = () => {
+  return moveCurrDir;
 }
 
 function logout() {
@@ -1059,6 +1328,9 @@ async function SyncWithServer() {
 async function LoadPage() {
   userPreferences = await GetPreferences();
   await getCurrentDir().then((data) => {
+    currDir = data;
+    baseDir = data;
+    init_move_list(data);
     init_grid(data);
     init_favourite_list();
   });

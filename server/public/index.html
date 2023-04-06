@@ -12,7 +12,7 @@
         <!-- Header Bar -->
         <div id="header" class="header-bar">
             <i id="menu-btn" class="menu-btn fa fa-bars fa-2x"></i>
-            <i id="back-btn" class="back-btn fa fa-angle-left fa-2x" aria-hidden="true"></i>
+            <i id="back-btn" class="back-btn fa fa-angle-left fa-2x hidden" aria-hidden="true"></i>
             <div id="directory-wrapper">
                 <h4 id="curr-dir"></h4>
             </div>
@@ -31,7 +31,6 @@
                     <ul id="system-details-list" class="sidebar-list">
                         <li id="system-status" class="sidebar-item">Status: Online</li>
                         <li id="system-uptime" class="sidebar-item">Uptime: </li>
-                        <li id="system-lastsync" class="sidebar-item">Last Sync: </li>
                     </ul>
                     <p id="system-total-storage" class="sidebar-item"></p>
                 </div>
@@ -40,9 +39,9 @@
 
         <!-- Main static page elements here -->
         <main>
-            <div id="search-bar" class="text-field center">
-                <!-- <i id="search-btn" class="fa-solid fa-search" aria-hidden="true"></i> -->
-                <input id="search-input" type="text" placeholder="Search Drive...">
+            <div id="search-sort-bar">
+                <input id="search-input" type="text" class="" placeholder="Search Drive...">
+                <i id="sort-btn" class="sort-asc fa-solid fa-arrow-down-wide-short fa-2x"></i>
             </div>
             <div id="drop-zone">
                 <div id="grid"></div>
@@ -50,23 +49,31 @@
             <p id="last-updated" class="center">Last Updated: Just Now</p>
         </main>
 
-        <button id="upload-btn" class="upload-btn fa-regular fa-cloud-arrow-up fa-3x" style="color: #ffffff;"></button>
+        <button id="upload-btn" class="upload-btn fa fa-cloud-arrow-up fa-3x" style="color: #ffffff;"></button>
+
+        <div id="move-file-container" class="popup hidden">
+            <i id="move-back-btn" class="back-btn fa fa-angle-left" aria-hidden="true"></i>
+            <ul id="move-list"></ul>
+            <button id="move-cancel-btn" class="btn-default">Cancel</button>
+            <button id="move-btn" class="btn-default">Move</button>
+        </div>
 
         <!-- (Initially) Hidden Components -->
         <!-- Context menu (hidden on page load) -->
         <ul id="context-menu" class="hidden">
-            <li id="file-info" class="context-menu-item">File info</li>
+            <li id="file-info" class="context-menu-item first">File info</li>
             <li id="favourite-file" class="context-menu-item">Favourite</li>
             <li id="download-file" class="context-menu-item">Download</li>
             <li id="rename-file" class="context-menu-item">Rename</li>
-            <li id="delete-file" class="context-menu-item">Delete</li>
+            <li id="move-file" class="context-menu-item">Move</li>
+            <li id="delete-file" class="context-menu-item last">Delete</li>
         </ul>
 
         <!-- File info (hidden on page load) -->
-        <ul id="file-info-modal" class="hidden">
-            <i id="close-file-info" class="btn-default close fa-solid fa-xmark" style="float: right;" aria-hidden="true"></i>
+        <ul id="file-info-modal" class="popup hidden">
+            <!-- <i id="close-file-info" class="btn-default close fa-solid fa-xmark" style="float: right;" aria-hidden="true"></i> -->
             <!-- <span id="close-file-info" class="close">&times;</span> -->
-            <li id="file-info-name" class="file-info-item file-info-title"></li>
+            <li id="file-info-name" class="file-info-title"></li>
             <li id="file-info-path" class="file-info-item"></li>
             <li id="file-info-size" class="file-info-item"></li>
             <li id="file-info-type" class="file-info-item"></li>
@@ -78,25 +85,25 @@
         <!-- Rename file input field (hidden on page load) -->
         <input type="text" class="hidden edit-input" id="edit-filename" value="">
 
-        <div id="delete-confirm" class="hidden">
+        <div id="delete-confirm" class="popup hidden">
             <h4>Are you sure you want to delete this file?</h4>
             <p style="font-size: 12px">By pressing "Delete", you will permanently remove this item from your Drive.</p>
-            <button id="delete-confirm-btn" class="btn-delete">Delete</button>
+            <button id="delete-confirm-btn" class="btn-default btn-delete">Delete</button>
             <button id="delete-cancel-btn" class="btn-default">Cancel</button>
         </div>
 
-        <div id="user-panel" class="hidden">
+        <div id="user-panel" class="popup hidden">
             <div id="user-panel-content">
                 <h3 id="user-panel-username">Account</h3>
                 <div id="user-panel-info">
                 </div>
                 <div id="preferences-container" class="sidebar-container">
-                    <h4>Preferences</h4>
+                    <h4 class="sidebar-heading">Preferences</h4>
                     <ul id="preferences-list" class="user-panel-info">
                     </ul>
                 </div>
                 <div id="user-panel-actions">
-                    <button id="user-panel-logout" class="btn-default">Logout</button>
+                    <button id="user-panel-logout" class="btn-default">Sign out</button>
                 </div>
             </div>
         </div>

@@ -127,32 +127,6 @@ function isDir(path) {
   }
 }
 
-// function ExpandDir(dirPath, userId) {
-//   // Directory!
-//   if (typeof dirPath === 'object') {
-//     try {
-//       fs.promises.access(dirPath);
-//     } catch (err) {
-//       getFileMetadata(dirPath.dir).then(metadata => {
-//         metadata.fileOwner = userId;
-//         InsertDocument(metadata, collectionName)
-//       });
-//     }
-//     for (let j = 0; j < dirPath.files.length; j++) {
-//       ExpandDir(dirPath.files[j]);
-//     }
-//   } else {
-//     try {
-//       fs.promises.access(dirPath);
-//     } catch (err) {
-//       getFileMetadata(dirPath).then(metadata => {
-//         metadata.fileOwner = userId;
-//         InsertDocument(metadata, collectionName);
-//       });
-//     }
-//   }
-// }
-
 function ZipDir(source, callback) {
   const target = source + '.zip';
   const stream = fs.createWriteStream(target);
@@ -220,6 +194,42 @@ async function SyncDBWithFilesystem(dir, userId) {
   });
 }
 
+async function MoveFile(file, newPath) {
+  // Move the file on the host filesystem
+  const oldPath = path.join(file.dirPath, file.fileName);
+  // Update the records in the database
+  try {
+    // Updates any descendants of the old path to the new path
+    await GetDocumentsWithRoot(oldPath, true).then(documents => {
+      console.log(documents);
+      if (documents.length > 0) {
+        for (let i = 0; i < documents.length; i++) {
+          const oldfPath = path.join(documents[i].dirPath);
+          const newfPath = oldfPath.replace(oldPath, path.join(newPath, file.fileName));
+          UpdateDocument(documents[i], {"dirPath": newfPath}, collectionName);
+          console.log("Updating " + oldfPath + " to " + newfPath);
+        }
+      }
+    });
+
+    const currentDate = new Date();
+    await UpdateDocument(file, {"dirPath" : newPath, "lastModified" : currentDate}, collectionName);
+    console.log("Moving " + file.fileName + " from " + file.dirPath +  " to " + newPath + " at " + currentDate);
+
+  } catch (error) {
+    console.error(error);
+  } finally {
+    fs.rename(oldPath + file.fileExt, path.join(newPath, file.fileName + file.fileExt), (err) => {
+        if (err) {
+            console.log(err);
+        } else {
+            console.log("Successfully renamed the file!");
+        }
+    });
+  }
+
+}
+
 async function RenameFile(file, newName) {
   // Rename the file on the host filesystem
   const oldName = file.fileName;
@@ -228,14 +238,8 @@ async function RenameFile(file, newName) {
   const newPath = path.join(dir, newName);
   const query = {fileName: oldName, dirPath: dir};
 
-  // Rename the file on the host filesystem: Comment out for testing
-
   // Update the records in the database
-  const client = new MongoClient(uri, { useNewUrlParser: true });
   try {
-    await client.connect();
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
     // Updates any descendants of the old path to the new path
     await GetDocumentsWithRoot(oldPath, true).then(documents => {
       if (documents.length > 0) {
@@ -262,7 +266,6 @@ async function RenameFile(file, newName) {
             console.log("Successfully renamed the file!");
         }
     });
-    client.close();
   }
 }
 
@@ -283,4 +286,4 @@ async function CreateDirectoryIfNotExists(directoryPath) {
   }
 }
 
-export { GetDocumentsWithRoot, InsertFilesystem, RenameFile, ZipDir, getFileMetadata, CreateDirectoryIfNotExists, SyncDBWithFilesystem };
+export { GetDocumentsWithRoot, InsertFilesystem, RenameFile, MoveFile, ZipDir, getFileMetadata, CreateDirectoryIfNotExists, SyncDBWithFilesystem };

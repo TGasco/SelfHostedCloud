@@ -14,7 +14,12 @@
                 "showFileExtensions": {
                     "prefString": "Show File Extensions",
                     "prefOptions": [true, false],
-                    "prefValue": false  }
+                    "prefValue": false  },
+                "useListView": {
+                    "prefString": "List View",
+                    "prefOptions": [true, false],
+                    "prefValue": false
+                }
             }
         }
     },

@@ -5,7 +5,7 @@ import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { Extract } from "unzipper";
-import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile, CreateDirectoryIfNotExists, InsertFilesystem, SyncDBWithFilesystem } from "../database/filesdb.js";
+import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile, CreateDirectoryIfNotExists, InsertFilesystem, SyncDBWithFilesystem, MoveFile } from "../database/filesdb.js";
 import { GetBaseDir, GetUserByCreds, NewUser } from "../database/usersdb.js";
 import os from "os";
 import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection, getTotalStorageUsed } from "../database/dbops.js";
@@ -309,6 +309,24 @@ router.get("/file-rename", authenticateToken, (req, res) => {
     });
   });
 });
+
+router.post("/file-move", authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  const userId = decoded.userId;
+  const fileId = req.body.fileId;
+  const newPath = req.body.newPath;
+  GetDocumentById(fileId, "files").then((file) => {
+    // Move file here
+    try {
+      MoveFile(file[0], newPath).then(() => {
+        res.status(200).send(file[0].fileName + file[0].fileExt + " moved to " + newPath);
+      });
+    } catch (err) {
+      console.log(err);
+      res.status(500).send({message: "Error moving file"});
+    }
+  });
+})
 
 router.get("/file-info", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;

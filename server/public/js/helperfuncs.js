@@ -14,3 +14,34 @@ export function BytesToSize(bytes) {
   let i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
   return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
 }
+
+export function truncatePath(filePath, element) {
+  const tempElement = element.cloneNode();
+  tempElement.style.visibility = 'hidden';
+  tempElement.style.position = 'absolute';
+  document.body.appendChild(tempElement);
+
+  tempElement.textContent = filePath;
+
+  if (tempElement.clientWidth < tempElement.parentElement.clientWidth * 0.75) {
+    document.body.removeChild(tempElement);
+    return filePath;
+  }
+
+  let pathSegments = filePath.split("/");
+  let truncatedPath = `/${pathSegments.pop()}`;
+
+  while (pathSegments.length > 0) {
+    const newPath = `/${pathSegments.pop()}${truncatedPath}`;
+    tempElement.textContent = newPath;
+
+    if (tempElement.clientWidth >= tempElement.parentElement.clientWidth * 0.75) {
+      document.body.removeChild(tempElement);
+      break;
+    } else {
+      truncatedPath = newPath;
+    }
+  }
+
+  return truncatedPath;
+}

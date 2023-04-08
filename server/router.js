@@ -4,23 +4,22 @@ import multer from "multer";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import { Extract } from "unzipper";
-import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile, CreateDirectoryIfNotExists, InsertFilesystem, SyncDBWithFilesystem, MoveFile } from "../database/filesdb.js";
-import { GetBaseDir, GetUserByCreds, NewUser } from "../database/usersdb.js";
+import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile, CreateDirectoryIfNotExists, SyncDBWithFilesystem, MoveFile } from "../database/filesdb.js";
+import { GetBaseDir, GetUserByCreds, NewUser, GetCurrDir } from "../database/usersdb.js";
 import os from "os";
-import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection, getTotalStorageUsed } from "../database/dbops.js";
+import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection, getStorageInfo } from "../database/dbops.js";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
 import { comparePasswords, isValidInput } from "../database/crypt.js";
 
 let router = express.Router();
 
-var currDir = "";
-
 const storage = multer.diskStorage({
   preservePath: true,
-  destination: (req, file, callback) => {
+  destination: async (req, file, callback) => {
     var targetPath;
+    // Get the current directory from collection
+    const currDir = await GetCurrDir(req.decoded.userId);
+    console.log("Current directory: " + currDir);
     const dirPath = dirname(file.originalname);
     if (dirPath == ".") {
       targetPath = currDir;
@@ -177,12 +176,17 @@ router.post("/signup", async (req, res) => {
     }
     console.log("User does not exist, create new user");
 
-    // Create the user's base directory
-    await CreateDirectoryIfNotExists(basedir);
 
     // Create new user
     const result = await NewUser(username, password, basedir);
-    return res.status(201).json({ message: 'User created' });
+    if (!result) {
+      console.log("Error creating user");
+      return res.status(500).json({ message: 'Error creating User' });
+    } else {
+      // Create the user's base directory
+      await CreateDirectoryIfNotExists(basedir);
+      return res.status(201).json({ message: 'User created' });
+    }
 
   } catch (err) {
     console.error(err.message);
@@ -192,8 +196,10 @@ router.post("/signup", async (req, res) => {
 
 // GET Requests
 router.get("/metadata", authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  const userId = decoded.userId;
   const path = req.query.path;
-  GetDocumentsWithRoot(path).then((data) => {
+  GetDocumentsWithRoot(path, userId).then((data) => {
     res.send(data);
   });
 });
@@ -231,14 +237,25 @@ router.get("/basedir", authenticateToken, (req, res) => {
   }
 });
 
-router.get("/get-currdir", authenticateToken, (req, res) => {
+router.get("/currdir", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
     console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
+    return res.sendStatus(401);
+  }
+
+  try {
     // Check if currDir is set
-    res.send(currDir);
+    GetCurrDir(decoded.userId).then((data) => {
+      if (data) {
+        res.status(200).send({ currDir: data });
+      } else {
+        res.status(404).send({ error: "Current directory not found" });
+      }
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).send({ error: "Error getting current directory" });
   }
 });
 
@@ -248,8 +265,23 @@ router.post("/currdir", authenticateToken, (req, res) => {
     console.log("User not authenticated!");
     return res.sendStatus(401);
   }
-  currDir = req.body.currDir;
-  res.send(req.body);
+  const currDir = req.body.currDir;
+  // Update the user's currDir field
+  try {
+    GetDocumentById(decoded.userId, "users").then((data) => {
+      if (data && data.length > 0) {
+        const user = data[0];
+        UpdateDocument(user, { ["userDefaults.currDir"]: currDir }, "users");
+      } else {
+        console.log("User not found");
+      }
+    });
+    res.status(200).send({ message: "Current directory updated to " + currDir });
+  } catch (err) {
+    console.log(err);
+    console.log("Error updating current directory");
+    res.status(500).send({ error: "Error updating current directory" });
+  }
 });
 
 router.get("/fileCollection", authenticateToken, (req, res) => {
@@ -342,7 +374,7 @@ router.get("/isfavourited", authenticateToken, (req, res) => {
   });
 });
 
-router.get("/togglefavourite", authenticateToken, (req, res) => {
+router.get("/toggle-favourite", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
   GetDocumentById(fileId, "files").then((file) => {
     // Toggle favourite here
@@ -354,17 +386,20 @@ router.get("/togglefavourite", authenticateToken, (req, res) => {
   });
 });
 
-router.get("/update-preferences", authenticateToken, (req, res) => {
+router.post('/update-preference', authenticateToken, (req, res) => {
   const decoded = req.decoded;
-  const preference = req.query.prefKey;
-  console.log("Preferences: " + preference);
-  GetDocumentById(decoded.userId, "users").then((user) => {
-    const prefKey = "userDefaults.preferences." + preference + ".prefValue";
-    UpdateDocument(user[0], {[prefKey]: !user[0].userDefaults.preferences[preference].prefValue}, "users").then(() => {
-      res.send({[preference]: !user[0].userDefaults.preferences[preference].prefValue});
+  const preference = req.body.prefKey;
+  const newValue = req.body.newValue;
+
+  GetDocumentById(decoded.userId, 'users').then((user) => {
+    const prefKey = 'userDefaults.preferences.' + preference + '.prefValue';
+
+    UpdateDocument(user[0], { [prefKey]: newValue }, 'users').then(() => {
+      res.send({ [preference]: newValue });
     });
   });
 });
+
 
 router.get("/file-delete", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
@@ -398,59 +433,73 @@ router.get("/file-delete", authenticateToken, (req, res) => {
   });
 });
 
-router.get("/total-storage", authenticateToken, (req, res) => {
+router.get("/storage-info", authenticateToken, (req, res) => {
   var decoded = req.decoded;
   if (!decoded) {
     console.log("User not authenticated!");
     res.sendStatus(401);
   } else {
-    getTotalStorageUsed("files").then((data) => {
+    getStorageInfo().then((data) => {
       res.send(JSON.stringify(data));
     });
   }
 });
 
-router.post("/upload", authenticateToken, upload.array("files"), (req, res) => {
-  // Manually process 'filePaths'
-  const userId = req.decoded.userId;
-  req.body.filePaths = JSON.parse(req.body.filePaths);
-  const files = req.files;
-  if (req.body.filePaths.length === 0) {
-    const metadataPromises = files.map(file => getFileMetadata(file.path));
-    console.log(metadataPromises);
-    Promise.all(metadataPromises).then((metadataArray) => {
-      const insertPromises = metadataArray.map(metadata => {
-        metadata.fileOwner = userId;
-        return InsertDocument(metadata, "files")
-      });
-      Promise.all(insertPromises).then(() => {
-        res.status(201).send("Files uploaded successfully");
-      });
-    });
-  } else {
-    files.forEach((file, index) => {
-      const srcPath = join(file.destination, file.filename);
-      var targetDir;
-      if (req.body.filePaths.hasOwnProperty(index)) {
-        targetDir = join(currDir, dirname(req.body.filePaths[index]));
-        const targetPath = join(targetDir, file.filename);
+const createFolderIfNotExists = async (folderPath) => {
+  try {
+    await fs.promises.access(folderPath);
+    return null;
+  } catch {
+    console.log("Creating folder: " + folderPath);
+    return await fs.promises.mkdir(folderPath, { recursive: true });
+  }
+};
 
-        if (!fs.existsSync(targetDir)) {
-          fs.mkdirSync(targetDir, { recursive: true });
-          getFileMetadata(targetDir).then((metadata) => {
-            metadata.fileOwner = userId;
-            InsertDocument(metadata, "files");
-          });
+const moveFile = async (src, dest) => {
+  await fs.promises.rename(src, dest);
+};
+
+const saveMetadata = async (filePath, userId) => {
+  const metadata = await getFileMetadata(filePath);
+  metadata.fileOwner = userId;
+  await InsertDocument(metadata, "files");
+};
+
+const allNull = (arr) => arr.every(value => value === null);
+
+router.post("/upload", authenticateToken, upload.array("files"), async (req, res) => {
+  try {
+    const userId = req.decoded.userId;
+    const currDir = await GetCurrDir(userId);
+    const filePaths = JSON.parse(req.body.filePaths);
+    const files = req.files;
+    // let targetPath;
+    if (allNull(filePaths)) {
+      const metadataPromises = files.map(file => saveMetadata(file.path, userId));
+      await Promise.all(metadataPromises);
+    } else {
+      const moveAndSavePromises = files.map(async (file, index) => {
+        const srcPath = join(file.destination, file.filename);
+        let targetPath;
+
+        if (filePaths[index] !== null) {
+          targetPath = join(currDir, filePaths[index]);
+        } else {
+          targetPath = join(currDir, file.filename);
         }
+          await createFolderIfNotExists(dirname(targetPath));
+          await moveFile(srcPath, targetPath);
+          await saveMetadata(targetPath, userId);
+      });
 
-        fs.renameSync(srcPath, targetPath);
-        getFileMetadata(targetPath).then((metadata) => {
-          metadata.fileOwner = userId;
-          InsertDocument(metadata, "files");
-        });
-      }
-    });
+      await Promise.all(moveAndSavePromises);
+      await SyncDBWithFilesystem(currDir, userId);
+    }
+
     res.status(201).send("Files uploaded successfully");
+  } catch (error) {
+    console.error('Error during file upload:', error);
+    res.status(500).send("An error occurred during file upload. Please try again.");
   }
 });
 
@@ -462,7 +511,6 @@ router.get('/sync', authenticateToken, (req, res) => {
     res.sendStatus(401);
   } else {
     GetBaseDir(decoded.userId).then((baseDir) => {
-      // currDir = baseDir;
       SyncDBWithFilesystem(baseDir, decoded.userId).then(() => {
         res.status(201).send("Synced filesystem with database");
       });

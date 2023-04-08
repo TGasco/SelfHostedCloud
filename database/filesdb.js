@@ -1,8 +1,7 @@
 // Connect to the MongoDB database
-import { MongoClient } from 'mongodb';
-import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import archiver from 'archiver';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname } from 'path';
@@ -12,12 +11,12 @@ const uri = "mongodb://127.0.0.1:27017"
 const dbName = "MyCloudDrive";
 const collectionName = "files";
 
-async function GetDocumentsWithRoot(root, deep=false) {
+async function GetDocumentsWithRoot(root, userId, deep=false) {
   if (deep) {
     var query = new RegExp("^" + root + "(\\/.*)*$");
-    return QueryCollection({"dirPath" : { $regex: query } }, collectionName);
+    return QueryCollection({ "dirPath" : { $regex: query } }, collectionName);
   } else {
-    var query = { "dirPath" : root };
+    var query = { "fileOwner": userId, "dirPath": root };
   }
   return QueryCollection(query, collectionName);
 }
@@ -44,7 +43,7 @@ async function walkDir(dir, callback) {
   }
 }
 
-function getFileMetadata(filePath, callback) {
+function getFileMetadata(filePath) {
   // First we need to check whether the path is valid!
   // console.log(filePath);
   if (pathExists(filePath)) {
@@ -52,20 +51,13 @@ function getFileMetadata(filePath, callback) {
     return null;
   }
   // Initialise variables
-  var fileName;
-  var fileExt;
-  var fileSize;
-  var lastModified;
-  var dirPath;
-  var lastViewed;
-  var isFavourited = false;
-  var isDirectory;
-  var uploadDate;
+  const fileData = {}
 
-  fileName = basename(filePath, extname(filePath));
-  dirPath = dirname(filePath);
-  fileExt = extname(filePath);
-  isDirectory = isDir(filePath);
+  fileData.fileName = basename(filePath, extname(filePath));
+  fileData.dirPath = dirname(filePath);
+  fileData.fileExt = extname(filePath);
+  fileData.isDirectory = isDir(filePath);
+  fileData.isFavourited = false;
   return new Promise(function(resolve, reject) {
     _stat(filePath, function(err, stats) {
       //Checking for errors
@@ -74,22 +66,11 @@ function getFileMetadata(filePath, callback) {
       }
       else {
         //Logging the stats Object
-        fileSize = stats.size;
-        lastModified = stats.mtime;
-        lastViewed = stats.atime;
-        uploadDate = stats.birthtime;
+        fileData.fileSize = stats.size;
+        fileData.lastModified = stats.mtime;
+        fileData.lastViewed = stats.atime;
+        fileData.uploadDate = stats.birthtime;
         const schema = GetDBSchema(collectionName);
-        const fileData = {
-          "fileName": fileName,
-          "fileExt": fileExt,
-          "dirPath": dirPath,
-          "fileSize": fileSize,
-          "lastModified": lastModified,
-          "lastViewed": lastViewed,
-          "uploadDate": uploadDate,
-          "isFavourited": isFavourited,
-          "isDirectory": isDirectory,
-        }
         // iterate over each schema element, and set its value to the corresponding key in the fileData object
         for (const [key, value] of Object.entries(schema)) {
           if (key in fileData) {
@@ -171,6 +152,8 @@ async function InsertFilesystem(dir, userId) {
           metadata.fileOwner = userId;
           InsertDocument(metadata, collectionName);
         });
+      } else {
+        // console.log("File already exists in database: " + filePath + "/" + baseName + fileExt);
       }
     });
   });
@@ -194,13 +177,13 @@ async function SyncDBWithFilesystem(dir, userId) {
   });
 }
 
-async function MoveFile(file, newPath) {
+async function MoveFile(file, newPath, userId) {
   // Move the file on the host filesystem
   const oldPath = path.join(file.dirPath, file.fileName);
   // Update the records in the database
   try {
     // Updates any descendants of the old path to the new path
-    await GetDocumentsWithRoot(oldPath, true).then(documents => {
+    await GetDocumentsWithRoot(oldPath, userId, true).then(documents => {
       console.log(documents);
       if (documents.length > 0) {
         for (let i = 0; i < documents.length; i++) {
@@ -230,18 +213,17 @@ async function MoveFile(file, newPath) {
 
 }
 
-async function RenameFile(file, newName) {
+async function RenameFile(file, newName, userId) {
   // Rename the file on the host filesystem
   const oldName = file.fileName;
   const dir = file.dirPath;
   const oldPath = path.join(dir, oldName);
   const newPath = path.join(dir, newName);
-  const query = {fileName: oldName, dirPath: dir};
 
   // Update the records in the database
   try {
     // Updates any descendants of the old path to the new path
-    await GetDocumentsWithRoot(oldPath, true).then(documents => {
+    await GetDocumentsWithRoot(oldPath, userId, true).then(documents => {
       if (documents.length > 0) {
         for (let i = 0; i < documents.length; i++) {
           const oldPath = path.join(documents[i].dirPath);

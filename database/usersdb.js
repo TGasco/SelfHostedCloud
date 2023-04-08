@@ -1,12 +1,7 @@
-import os from 'os';
 import { stat as _stat } from 'fs';
-import { join } from 'path';
-import { GetDocumentById, InsertDocument, QueryCollection, GetDBSchema, getDefaultAttributeValue } from './dbops.js';
-import { hashPassword, isValidInput } from './crypt.js';
+import { GetDocumentById, InsertDocument, QueryCollection, GetDBSchema } from './dbops.js';
+import { hashPassword } from './crypt.js';
 
-// Credentials for root user: REMOVE THIS IN PRODUCTION
-// Username: rootUser
-// Password: rootUser123
 const collectionName = "users";
 
 async function NewUser(userName, userPass, basedir) {
@@ -18,51 +13,25 @@ async function NewUser(userName, userPass, basedir) {
   userData = {
     userName: userName,
     userPass: hashedPass,
-    userDefaults: { baseDir: basedir,
-                    lastSync: new Date(),
-                    totalStorageUsed: 0,
-                    totalStorage: 0,
-                    preferences: { theme: {prefString: "Theme",
-                                   prefOptions: ["light", "dark"], prefValue: "light"},
-                                   showFileExtensions: { prefString: "Show File Extensions",
-                                  prefOptions: [true, false],
-                                  prefValue: false  } } }
   };
 
   for (const [key, value] of Object.entries(schema)) {
-    if (key in userData) {
-      schema[key] = userData[key];
-    } else {
-      schema[key] = getDefaultAttributeValue(value);
+    if (userData[key] == undefined) {
+      userData[key] = value;
     }
   }
 
+  userData.userDefaults.baseDir = basedir;
+  userData.userDefaults.currDir = basedir;
+  userData.userDefaults.lastSync = new Date();
+
   try {
-    const result = await InsertDocument(schema, collectionName);
+    const result = await InsertDocument(userData, collectionName);
     return result;
   } catch (err) {
     console.log(err);
+    return null;
   }
-}
-
-async function SetDefaults(userId, defaults=null) {
-  if (defaults === null) {
-    defaults =     {
-    userName: userName,
-    userPass: hashedPass,
-    userDefaults: { baseDir: basedir,
-                    lastSync: new Date(),
-                    totalStorageUsed: 0,
-                    totalStorage: 0,
-                    preferences: { theme: "light",
-                                    showFileExtensions: false, }}
-    }
-  }
-  const user = await GetUserById(userId);
-  user[0].userDefaults = {
-    baseDir: defaults.baseDir,
-  };
-  return await UpdateDocument(user, collectionName);
 }
 
 async function UpdateLastSync(userId) {
@@ -85,5 +54,10 @@ async function GetBaseDir(userId) {
   return user[0].userDefaults.baseDir;
 }
 
+async function GetCurrDir(userId) {
+  const user = await GetDocumentById(userId, collectionName);
+  return user[0].userDefaults.currDir;
+}
 
-export { NewUser, GetBaseDir, GetUserById, GetUserByCreds };
+
+export { NewUser, GetBaseDir, GetCurrDir, GetUserById, GetUserByCreds };

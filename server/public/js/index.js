@@ -1,4 +1,4 @@
-import { BytesToSize, ConvertDate } from './helperfuncs.js';
+import { BytesToSize, ConvertDate, truncatePath } from './helperfuncs.js';
 
 // Store the current directory
 let currDir = null;
@@ -6,6 +6,19 @@ let moveCurrDir = null;
 let userPreferences;
 let username;
 let baseDir;
+
+async function handleResponse(response, customMessage = "Internal Server Error") {
+  if (response.ok) {
+    return response.json();
+  } else if (response.status === 401) {
+    const error = await response.text();
+    redirectToLogin();
+  } else {
+    const error = await response.text();
+    throw new Error(error);
+  }
+}
+
 /**
  * Initialize the grid view with the files and folders at the given path.
  * @param {string} path - The path to display in the grid view.
@@ -37,16 +50,11 @@ async function init_grid(path, documents = null) {
     if (!documents) {
       // Get and display the relative path
       const relativePath = await GetRelativePath(path);
-      currDirElement.textContent = relativePath;
+      currDirElement.textContent = truncatePath(relativePath, currDirElement);
       // Get the files and folders at the given path
       files = await fetchFilesMetadata(path);
     } else {
       files = documents;
-    }
-
-    if (!files) {
-      redirectToLogin();
-      return;
     }
 
     if (files.length === 0) {
@@ -55,7 +63,6 @@ async function init_grid(path, documents = null) {
       emptyMessage.id = "empty-drive-message";
       emptyMessage.className = "empty-drive-message center";
       oldGrid.replaceWith(emptyMessage);
-      // newGrid.appendChild(emptyMessage);
     } else {
       // Sort the files
       const sortBtn = document.getElementById("sort-btn");
@@ -82,10 +89,12 @@ async function init_grid(path, documents = null) {
       const success = await updateCurrentDir(path);
 
       if (!success) {
-        redirectToLogin();
+        // redirectToLogin();
+        console.log("Failed to update current directory");
         return;
       }
       currDir = path;
+      // console.log("Current directory updated to:", currDir);
     }
 
   } catch (error) {
@@ -204,10 +213,10 @@ async function init_list_view(documents, elementId, onClickListener) {
       documentFragment.appendChild(fav);
     } else {
       // Create an array of promises for creating favourite items
-      const favPromises = documents.map((file, i) => createItem(file, i, documentFragment, onClickListener.bind(null, file)));
+      const docPromises = documents.map((file, i) => createItem(file, i, documentFragment, onClickListener.bind(null, file)));
 
       // Wait for all the promises to resolve
-      await Promise.all(favPromises);
+      await Promise.all(docPromises);
     }
 
     // Append the document fragment to the new list
@@ -286,14 +295,38 @@ function createPrefItem(pref, i, prefFragment) {
   return new Promise(async (resolve) => {
     const [key, value] = pref;
     const prefValue = value.prefValue;
+    const prefType = value.prefType;
     const prefItem = document.createElement("li");
-    prefItem.className = "sidebar-item pref-item";
+    let prefInput;
+    prefItem.className = "sidebar-item pref-item prefType-" + prefType;
 
     const prefName = document.createElement("p");
     prefName.textContent = value.prefString;
     prefName.className = "pref-name";
     prefItem.appendChild(prefName);
 
+    switch(prefType) {
+      case "toggle":
+        prefInput = createSwitch(key, prefValue);
+        break;
+      case "slider":
+        const prefOptions = value.prefOptions;
+        prefInput = createSlider(key, prefValue, prefOptions);
+        break;
+      default:
+        prefInput = createSwitch(key, prefValue);
+
+    }
+
+    // Add the input type to the prefItem
+    prefItem.appendChild(prefInput);
+
+    prefFragment.appendChild(prefItem);
+    resolve();
+  });
+}
+
+const createSwitch = (key, prefValue) => {
     // Create label element for the switch
     const switchLabel = document.createElement("label");
     switchLabel.className = "switch";
@@ -301,14 +334,12 @@ function createPrefItem(pref, i, prefFragment) {
     const prefToggle = document.createElement("input");
     prefToggle.type = "checkbox";
     prefToggle.id = key;
-    // prefToggle.id = "pref-toggle-" + i;
-    prefToggle.className = "pref-toggle";
+    prefToggle.className = "prefType-toggle";
     if (prefValue) {
       prefToggle.checked = true;
     } else {
       prefToggle.checked = false;
     }
-    // prefToggle.textContent = prefValue;
     prefToggle.addEventListener("click", (e) => {
       updatePreference(e);
     });
@@ -321,34 +352,100 @@ function createPrefItem(pref, i, prefFragment) {
     sliderSpan.className = "slider";
     switchLabel.appendChild(sliderSpan);
 
-    // Add the switch label to the prefItem
-    prefItem.appendChild(switchLabel);
-
-    prefFragment.appendChild(prefItem);
-    resolve();
-  });
+    return switchLabel;
 }
 
+const createSlider = (key, prefValue, prefOptions) => {
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.id = key;
+  slider.className = "prefType-slider";
+  slider.min = prefOptions[0].min;
+  slider.max = prefOptions[0].max;
+  slider.value = prefValue;
+  slider.addEventListener("click", (e) => {
+    updatePreference(e);
+  });
+
+  return slider;
+}
+
+const extractPrefType = (element) => {
+  const classNames = element.className.split(' ');
+  const prefTypeClass = classNames.find((className) => className.startsWith('prefType-'));
+  if (prefTypeClass) {
+    return prefTypeClass.split('-')[1];
+  }
+  return null;
+};
+
+const getNewValueFromEvent = (e, prefType) => {
+  switch (prefType) {
+    case 'toggle':
+      return e.target.checked;
+    case 'slider':
+      return parseInt(e.target.value, 10);
+    case 'string':
+    default:
+      return e.target.textContent;
+  }
+};
 
 const updatePreference = async (e) => {
   try {
     const prefName = e.target.id;
-    const uri = `/update-preferences?prefKey=${prefName}&prefValue=${e.target.textContent}`;
-    const response = await fetch("/update-preferences?prefKey=" + prefName, {
-      method: "GET",
+    const prefType = extractPrefType(e.target);
+    const newValue = getNewValueFromEvent(e, prefType);
+
+    const response = await fetch('/update-preference', {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + localStorage.getItem('token'),
       },
+      body: JSON.stringify({
+        prefKey: prefName,
+        newValue: newValue,
+      }),
     });
 
     const data = await response.json();
-    LoadPage();
+    LoadPage(true);
     return data;
   } catch (error) {
-    console.error("Error updating preferences:", error);
+    console.error('Error updating preferences:', error);
   }
-}
+};
+
+
+
+// const updatePreference = async (e) => {
+//   try {
+//     const prefName = e.target.id;
+//     const newValue = e.target.textContent;
+//     console.log("prefName: ", prefName);
+//     console.log("newValue: ", newValue);
+
+//     const response = await fetch("/update-preferences", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: "Bearer " + localStorage.getItem("token"),
+//       },
+//       body: JSON.stringify({
+//         prefKey: prefName,
+//         newValue: newValue,
+//       }),
+//     });
+
+//     const data = await response.json();
+//     LoadPage();
+//     return data;
+//   } catch (error) {
+//     console.error("Error updating preferences:", error);
+//   }
+// };
+
 
 /**
  * Get the relative path for the given path, replacing the base directory with "My Cloud".
@@ -357,15 +454,7 @@ const updatePreference = async (e) => {
  */
 async function GetRelativePath(path) {
   try {
-    const res = await fetch("/basedir", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + localStorage.getItem("token"),
-      },
-    });
-
-    const baseDir = await res.text();
+    const baseDir = await getBaseDir();
     const relPath = path.replace(baseDir, "My Cloud");
     return relPath;
   } catch (error) {
@@ -472,6 +561,9 @@ async function fetchFilesMetadata(path) {
     });
 
     if (filesResponse.status !== 200) {
+      if (filesResponse.status === 401) {
+        redirectToLogin();
+      }
       return null;
     }
 
@@ -507,6 +599,28 @@ async function updateCurrentDir(path) {
   } catch (error) {
     console.error("Error updating current directory:", error);
     return false;
+  }
+}
+
+async function getCurrentDir() {
+  try {
+    const currDirResponse = await fetch("/currdir", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + localStorage.getItem("token"),
+      },
+    });
+
+    if (currDirResponse.status !== 200) {
+      return null;
+    }
+    const response = await currDirResponse.json();
+    const currDir = response.currDir;
+    return currDir;
+  } catch (error) {
+    console.error("Error getting current directory:", error);
+    return null;
   }
 }
 
@@ -642,26 +756,20 @@ function GetFileIcon(file) {
 // Event Listeners
 const addBackBtnClickListener = (backBtn) => {
   backBtn.addEventListener("click", async () => {
-    const baseDir = await getCurrentDir();
-
     if (currDir !== baseDir) {
       const prevDir = await GetPreviousDir(currDir);
-      if (backBtn.classList.contains("hidden")) {
-        backBtn.classList.remove("hidden");
-      }
+      backBtn.classList.remove("hidden");
       init_grid(prevDir);
     } else {
-      if (!backBtn.classList.contains("hidden")) {
         console.log("You are already in the base directory.");
         backBtn.classList.add("hidden");
-      }
     }
   });
 };
 
 const addMoveBackBtnClickListener = (backBtn) => {
   backBtn.addEventListener("click", async () => {
-    const baseDir = await getCurrentDir();
+    // const baseDir = await getBaseDir();
 
     if (moveCurrDir !== baseDir) {
       const prevDir = await GetPreviousDir(moveCurrDir);
@@ -838,7 +946,7 @@ var showDeleteConfirm = (e, file) => {
   deleteConfirmation.classList.add(file._id);
   setTimeout(() => {
     deleteConfirmation.style.opacity = 1;
-  }, 100);
+  }, 0);
 
   addEventListenerAndStore("delete-cancel-btn", "click", "hideDeleteConfirmListener", hideDeleteConfirm.bind(null, e, file));
   addEventListenerAndStore("delete-confirm-btn", "click", "deleteFileListener", deleteFile.bind(null, e, file));
@@ -847,10 +955,10 @@ var showDeleteConfirm = (e, file) => {
 var hideDeleteConfirm = (e, file) => {
   const deleteConfirmation = document.getElementById("delete-confirm");
   deleteConfirmation.classList.remove(file._id);
-  deleteConfirmation.classList.add("hidden");
+  deleteConfirmation.style.opacity = 0;
   setTimeout(() => {
-    deleteConfirmation.style.opacity = 0;
-  }, 100);
+    deleteConfirmation.classList.add("hidden");
+  }, 200);
 
   removeEventListenerIfExists("delete-cancel-btn", "click", "hideDeleteConfirmListener");
 }
@@ -882,22 +990,17 @@ const showFileInfo = (e, file) => {
   fileInfoItems[5].innerHTML = "Favourite: " + file.isFavourited;
 
   window.addEventListener("click", hideFileInfo);
-  // const hideFileInfoListener = (e) => hideFileInfo(e, file);
-  // addEventListenerAndStore("close-file-info", "click", "hideFileInfo", hideFileInfoListener);
 };
 
 // Hide file info panel
 const hideFileInfo = (e, file) => {
-  console.log(e.target);
   const fileInfo = document.getElementById("file-info-modal");
   const fileInfoItem = document.getElementById("file-info");
   if (e.target !== fileInfo && e.target !== fileInfoItem) {
-    console.log("clicked outside!");
     fileInfo.style.opacity = 0;
     setTimeout(function() {
-      // fileInfo.classList.remove(file._id);
       fileInfo.classList.add("hidden");
-    }, 100);
+    }, 200);
     // removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
     window.removeEventListener("click", hideFileInfo);
   }
@@ -905,7 +1008,7 @@ const hideFileInfo = (e, file) => {
 
 
 var favouriteFile = (e, file) => {
-  fetch ("/togglefavourite?fileId=" + file._id, {
+  fetch("/toggle-favourite?fileId=" + file._id, {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
@@ -913,8 +1016,7 @@ var favouriteFile = (e, file) => {
     }
   }).then((res) => {
     return res.json();
-  }).then((data) => {
-    console.log(data.isFavourited);
+  }).then(() => {
     init_favourite_list();
   });
 };
@@ -941,7 +1043,6 @@ const renameFile = (e, file) => {
     if (e.target !== editFileInputField && e.target !== fileName && e.target !== renameItem) {
       fileName.classList.remove("hidden");
       editFileInputField.classList.add("hidden");
-      console.log("clicked outside!");
       editFileInputField.removeEventListener("keydown", keyEnterEvent);
       window.removeEventListener("click", hideInputField);
     }
@@ -957,7 +1058,7 @@ const renameFile = (e, file) => {
         newName: editFileInputField.value
       });
 
-      fetch ("/file-rename?" + params, {
+      fetch("/file-rename?" + params, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -1068,7 +1169,9 @@ const showMoveFile = (e, file) => {
 
   // Show move file container
   moveFileContainer.classList.remove("hidden");
-  moveFileContainer.style.opacity = 1;
+  setTimeout(() => {
+    moveFileContainer.style.opacity = 1;
+  }, 0);
 
   // Add event listener to move button
   removeEventListenerIfExists("move-btn", "click", "moveFileListener");
@@ -1128,14 +1231,16 @@ const uploadFiles = async (files) => {
   const filePaths = [];
 
   for (const file of files) {
-    // Ingore .DS_Store files
-    if (file.name === ".DS_Store") {
+    // Ignore hidden files
+    if (file.name.startsWith(".")) {
      continue;
     }
     console.log(file);
     formData.append("files", file);
     if (file.webkitRelativePath) {
       filePaths.push(file.webkitRelativePath);
+    } else {
+      filePaths.push(null);
     }
   }
 
@@ -1228,7 +1333,7 @@ let focusTriggered = false;
 function handleFocus() {
   if (!focusTriggered) {
     focusTriggered = true;
-    LoadPage();
+    LoadPage(true);
   }
 }
 
@@ -1278,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 
-var getCurrentDir = async () => {
+var getBaseDir = async () => {
   const result = await fetch("/basedir", {
     method: "GET",
     headers: {
@@ -1289,25 +1394,44 @@ var getCurrentDir = async () => {
   return result;
 }
 
-var getMoveCurrDir = () => {
-  return moveCurrDir;
-}
-
 function logout() {
   localStorage.removeItem("token");
   window.location.href = "/login";
 }
 
 async function getTotalStorage() {
-  var totalStorage = await fetch("/total-storage", {
+  var storageInfo = await fetch("/storage-info", {
     method: "GET",
     headers: {
       "Content-Type": "application/json",
       "Authorization": "Bearer " + localStorage.getItem("token"),
     }
-  }).then((res) => res.text());
+  }).then((res) => res.json());
+  var totalStorage = storageInfo.totalStorage * (userPreferences.storageAllocation.prefValue / 100);
+  var usedStorage = storageInfo.usedStorage;
+
+  var storageRatio = (usedStorage / totalStorage) * 100;
+
   var storageElement = document.getElementById("system-total-storage");
-  storageElement.innerHTML = `Used: ${BytesToSize(totalStorage)} / 100 GB`;
+  storageElement.textContent = `Used: ${BytesToSize(usedStorage)} / ${BytesToSize(totalStorage)}`;
+
+  const progressBarFill = document.getElementById("progress-bar-fill");
+  progressBarFill.style.width = `${storageRatio}%`;
+
+  if (storageRatio >= 90) {
+    storageElement.classList.add("text-danger");
+    progressBarFill.classList.add("fill-danger");
+  } else if (storageRatio >= 80) {
+    storageElement.classList.add("text-warning");
+    progressBarFill.classList.add("fill-warning");
+    storageElement.classList.remove("text-danger");
+    progressBarFill.classList.remove("fill-danger");
+  } else {
+    storageElement.classList.remove("text-danger");
+    progressBarFill.classList.remove("fill-danger");
+    storageElement.classList.remove("text-warning");
+    progressBarFill.classList.remove("fill-warning");
+  }
 }
 
 async function SyncWithServer() {
@@ -1325,15 +1449,18 @@ async function SyncWithServer() {
   }
 }
 
-async function LoadPage() {
+async function LoadPage(soft = false) {
+  let path;
   userPreferences = await GetPreferences();
-  await getCurrentDir().then((data) => {
-    currDir = data;
-    baseDir = data;
-    init_move_list(data);
-    init_grid(data);
-    init_favourite_list();
-  });
+  baseDir = await getBaseDir();
+  currDir = await getCurrentDir();
+  if (soft) path = currDir;
+  else path = baseDir;
+  console.log("Current Directory: " + path);
+  init_move_list(path);
+  init_grid(path);
+  init_favourite_list();
+  getTotalStorage();
 }
 
 async function GetUsername() {
@@ -1354,5 +1481,4 @@ window.onload = async () => {
   await LoadPage();
   username = await GetUsername();
   document.getElementById("user-panel-username").textContent = `${username}'s Cloud`;
-  getTotalStorage();
 };

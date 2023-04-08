@@ -114,6 +114,12 @@ main {
 
 #curr-dir {
   transform: scale(1);
+  max-width: 75%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-decoration: none;
   transition: transform 0.2s;
 }
 
@@ -225,6 +231,48 @@ main {
   text-align: center;
 }
 
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: #e0e0e0;
+  position: relative;
+  border-radius: 5px;
+  transform: scale(1);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s, box-shadow 0.3s ease-in-out;
+}
+
+.progress-bar:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.1);
+}
+
+.progress-bar-fill {
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-color: #2196f3;
+  border-radius: 5px;
+  width: 0%;
+}
+
+.fill-danger {
+  background-color: #e60000;
+}
+
+.text-danger {
+  color: #e60000 !important;
+}
+
+.fill-warning {
+  background-color: #ff9900;
+}
+
+.text-warning {
+  color: #ff9900 !important;
+}
+
 .fav-item {
   color: #1f1f3f;
   filter: brightness(100%);
@@ -264,7 +312,8 @@ main {
 }
 
 .fav-text {
-  margin-left: 25px;
+  margin-left: 15px;
+  text-overflow: ellipsis;
   transition : all 0.3s;
 }
 
@@ -512,7 +561,7 @@ main {
   list-style: none;
   width: 350px;
   z-index: 1000;
-  transition: all 0.15s;
+  transition: all 0.2s;
 }
 
 #move-file-container {
@@ -597,8 +646,7 @@ main {
 }
 
 .popup:hover {
-  transform: scale(1.01);
-  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.1);
 }
 
 #user-panel {

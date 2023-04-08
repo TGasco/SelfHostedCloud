@@ -31,6 +31,7 @@ let PORT = 8081; // Port to listen on
 setup().then(() => {
   // Start server
   updateAllCollections();
+  // Check if server is already running on port, if so, restart
   const server = https.createServer(sslOptions, app);
   server.listen(PORT, function () {
     var host = server.address().address;

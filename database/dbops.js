@@ -1,10 +1,11 @@
 // Connect to the MongoDB database
 import { MongoClient } from "mongodb";
-import mongoose from "mongoose";
 import fs from "fs";
+import os from "os";
+import { exec } from "child_process";
 import { fileURLToPath } from "url";
-import { stat as _stat, access, F_OK, lstatSync } from "fs";
-import { basename, extname, dirname, join } from "path";
+import { stat as _stat } from "fs";
+import { dirname, join } from "path";
 import { ObjectId } from "mongodb";
 
 // Define the MongoDB connection URI
@@ -29,21 +30,6 @@ async function CountDocuments(collectionName) {
 async function GetAllDocuments(collectionName) {
   return QueryCollection({}, collectionName);
 }
-
-// async function QueryCollection(query, collectionName) {
-//   const client = new MongoClient(uri, { useNewUrlParser: true });
-//   try {
-//     await client.connect();
-//     const db = client.db(dbName);
-//     const collection = db.collection(collectionName);
-//     const documents = await collection.find(query).toArray();
-//     return documents;
-//   } catch (error) {
-//     console.error(error);
-//   } finally {
-//     client.close();
-//   }
-// }
 
 async function QueryCollection(query, collectionName, pipeline = null) {
   const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -182,33 +168,6 @@ async function UpdateDocument(document, updatedPairs, collectionName) {
   }
 }
 
-async function getTotalStorageUsed(collectionName) {
-  const client = new MongoClient(uri, { useUnifiedTopology: true });
-
-  try {
-    await client.connect();
-
-    const db = client.db(dbName);
-    const collection = db.collection(collectionName);
-
-    const result = await collection.aggregate([
-      {
-        $group: {
-          _id: null,
-          totalSize: { $sum: '$fileSize' }
-        }
-      }
-    ]).toArray();
-
-    return result[0]?.totalSize || 0;
-  } catch (error) {
-    console.error('Error connecting to the database:', error);
-    return 0;
-  } finally {
-    await client.close();
-  }
-}
-
 function GetDBSchema(collection=null) {
   // Read the schema from the JSON file
   const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -243,7 +202,7 @@ function checkAndUpdateAttributes(document, schema, updatedPairs, currentPath) {
 
     if (typeof schema[attribute] === 'object' && !Array.isArray(schema[attribute])) {
       if (!document.hasOwnProperty(attribute)) {
-        document[attribute] = {};
+        document[attribute] = schema[attribute];
       }
 
       checkAndUpdateAttributes(document[attribute], schema[attribute], updatedPairs, currentAttributePath);
@@ -309,20 +268,93 @@ async function updateAllCollections() {
   }
 }
 
-// ... other functions from the previous response
+async function getTotalStorageUsed() {
+  const client = new MongoClient(uri, { useUnifiedTopology: true });
+
+  try {
+    await client.connect();
+
+    const db = client.db(dbName);
+    const collection = db.collection("files");
+
+    const result = await collection.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalSize: { $sum: '$fileSize' }
+        }
+      }
+    ]).toArray();
+
+    return result[0]?.totalSize || 0;
+  } catch (error) {
+    console.error('Error connecting to the database:', error);
+    return 0;
+  } finally {
+    await client.close();
+  }
+}
+
+function GetFreeStorage() {
+    return new Promise((resolve, reject) => {
+        if (os.type() === 'Windows_NT') {
+            exec('wmic logicaldisk get size,freespace', (error, stdout) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+
+                const lines = stdout.trim().split('\n');
+                let totalFreeSpace = 0;
+                lines.slice(1).forEach(line => {
+                    const [size, freeSpace] = line.trim().split(/\s+/);
+                    totalFreeSpace += Number(freeSpace);
+                });
+
+                resolve(totalFreeSpace);
+            });
+        } else {
+            exec('df -Pk . | sed 1d | grep -v used | awk \'{ print $4 "\\t" }\'', (error, stdout) => {
+                if (error) {
+                    reject(error);
+                    return;
+                }
+
+                const freeSpaceKb = Number(stdout.trim().split('\t')[0]);
+                const totalFreeSpace = freeSpaceKb * 1024;
+
+                resolve(totalFreeSpace);
+            });
+        }
+    });
+}
+
+
+
+
+
+async function getStorageInfo() {
+  const freeStorage = await GetFreeStorage();
+  const usedStorage = await getTotalStorageUsed('files');
+
+  return {
+    usedStorage,
+    freeStorage,
+    totalStorage: usedStorage + freeStorage
+  };
+}
 
 
 export {
   CountDocuments,
-  GetAllDocuments,
   QueryCollection,
   GetDocumentById,
   DocumentExists,
   InsertDocument,
   RemoveDocument,
   UpdateDocument,
-  getTotalStorageUsed,
   updateAllCollections,
   GetDBSchema,
   getDefaultAttributeValue,
+  getStorageInfo
 };

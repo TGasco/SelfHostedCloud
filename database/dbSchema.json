@@ -4,21 +4,31 @@
         "userPass": "string",
         "userDefaults": {
             "baseDir": "string",
+            "currDir": "string",
             "lastSync": "date",
             "totalStorageUsed": 0,
             "totalStorage": 0,
             "preferences": {
                 "theme": {
                     "prefString": "Theme",
+                    "prefType": "string",
                     "prefOptions": ["light", "dark"], "prefValue": "light"},
                 "showFileExtensions": {
                     "prefString": "Show File Extensions",
+                    "prefType": "toggle",
                     "prefOptions": [true, false],
                     "prefValue": false  },
                 "useListView": {
                     "prefString": "List View",
+                    "prefType": "toggle",
                     "prefOptions": [true, false],
                     "prefValue": false
+                },
+                "storageAllocation": {
+                    "prefString": "Storage Allocation",
+                    "prefType": "slider",
+                    "prefOptions": [{"min": 5, "max": 95}],
+                    "prefValue": 80
                 }
             }
         }

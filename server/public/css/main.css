@@ -326,6 +326,7 @@ main {
   border-radius: 70%;
   margin-right: 25px;
   background-color: #00B6FF;
+  color: #fff;
   box-shadow: 1px 0px 1px 0px rgba(0, 0.1, 0, 0.1);
   transform: scale(1);
   filter: brightness(100%);
@@ -402,6 +403,46 @@ main {
 /* Move the circular indicator to the right when the input is checked */
 .switch input:checked + .slider:before {
   transform: translateX(13px);
+}
+
+.range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: #d3d3d3;
+  outline: none;
+  opacity: 1;
+  -webkit-transition: .2s;
+  transition: all .2s;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f4f3f3;
+  cursor: pointer;
+  border: 2px solid #f1f1f1;
+}
+
+.range-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f4f3f3;
+  cursor: pointer;
+  border: 2px solid #f1f1f1;
+}
+
+
+.range-slider:hover {
+  cursor: pointer;
+  filter: brightness(103%);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
 }
 
 #directory-wrapper {
@@ -635,6 +676,10 @@ main {
   transition: all 0.2s;
 }
 
+#delete-confirm p {
+  font-size: 12px;
+}
+
 .popup {
   background-color: #fff;
   border: 1px solid #ccc;
@@ -670,4 +715,23 @@ main {
   color: #c8c8c8;
   margin: 0 auto;
   text-align: center;
+}
+
+.err-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  list-style: none;
+  width: 400px;
+  height: 200px;
+  z-index: 1000;
+  transition: all 0.2s;
+}
+
+.err-popup p, h1, h2, h3, h4 {
+  font-weight: bold;
+  margin: 0 auto;
+  text-align: center;
+  padding: 10px;
 }

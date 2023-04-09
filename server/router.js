@@ -5,7 +5,8 @@ import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import { GetDocumentsWithRoot, ZipDir, getFileMetadata, RenameFile, CreateDirectoryIfNotExists, SyncDBWithFilesystem, MoveFile } from "../database/filesdb.js";
-import { GetBaseDir, GetUserByCreds, NewUser, GetCurrDir } from "../database/usersdb.js";
+import { GetBaseDir, GetUserByCreds, NewUser, GetCurrDir, UpdateRefreshToken } from "../database/usersdb.js";
+import { generateAccessToken, generateRefreshToken } from "../utils/token.js";
 import os from "os";
 import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryCollection, getStorageInfo } from "../database/dbops.js";
 import jwt from "jsonwebtoken";
@@ -19,7 +20,6 @@ const storage = multer.diskStorage({
     var targetPath;
     // Get the current directory from collection
     const currDir = await GetCurrDir(req.decoded.userId);
-    console.log("Current directory: " + currDir);
     const dirPath = dirname(file.originalname);
     if (dirPath == ".") {
       targetPath = currDir;
@@ -42,40 +42,50 @@ const fileCollection = "files";
 const userCollection = "users";
 
 function authenticateToken(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader) {
-    const token = authHeader.split(" ")[1];
+  const token = req.cookies.accessToken;
 
-    // If token is not present, return 401
-    if (!token) return res.sendStatus(401);
-
-    // If token is present, verify it
-    // Change "secret" to process.env.JWT_SECRET
-    jwt.verify(token, "secret", (err, decoded) => {
-      if (err) {
-        // Redirect user to login page
-
-        res.sendStatus(401);
-      } else {
-        req.decoded = decoded;
-        next();
-      }
-    });
-  } else {
-    res.sendStatus(401);
+  // If token is not present, return 401
+  if (!token) {
+    // Redirect user to login page
+    const error = new Error("Unauthorized");
+    error.status = 401;
+    return next();
+    // res.redirect("/login");
+    // return res.sendStatus(401);
   }
+
+  // If token is present, verify it
+  // Change "secret" to process.env.JWT_SECRET
+  jwt.verify(token, "accessSecret", (err, decoded) => {
+    if (err) {
+      // Redirect user to login page
+
+      res.sendStatus(401);
+    } else {
+      req.decoded = decoded;
+      next();
+    }
+  });
 }
 
-router.get("uid", authenticateToken, function (req, res) {
-  // Check auth status
-  if (!req.decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
-    res.setHeader("Content-type", "application/json");
-    res.setHeader("status", "200");
-    res.send(JSON.stringify(req.decoded.userId));
-  }
+router.post('/token', async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+  if (!refreshToken) return res.sendStatus(401);
+
+  const user = await QueryCollection({ refreshToken: refreshToken }, userCollection);
+
+  if (!user) return res.sendStatus(403);
+
+  jwt.verify(refreshToken, 'refreshSecret', (err, user) => {
+    if (err) return res.sendStatus(403);
+
+    const accessToken = generateAccessToken(user.userId);
+    res.cookie('accessToken', accessToken, { httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      expires: new Date(Date.now() + 15 * 60 * 1000) }); // 15 minutes
+    res.json({ accessToken });
+  });
 });
 
 router.get("/username", authenticateToken, async function (req, res) {
@@ -91,17 +101,26 @@ router.get("/username", authenticateToken, async function (req, res) {
   }
 })
 
-router.get("/myDrive", authenticateToken, function (req, res) {
+router.get("/", authenticateToken, function (req, res) {
+  console.log("GET main page");
   // Check auth status
   if (!req.decoded) {
     console.log("User not authenticated!");
-    res.sendStatus(401);
+    res.redirect("/login");
   } else {
-    res.setHeader("Content-type", "text/html");
+    console.log("User authenticated! Serving index.html...");
+
+    // Set headers to prevent caching
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    res.setHeader("Content-Type", "text/html");
     res.setHeader("status", "200");
-    res.sendFile(__dirname + "/" + "public/index.html");
+    res.sendFile(join(__dirname, "views", "index.html"));
   }
 });
+
 
 // This code sets up a new route for a GET request to the '/login' path,
 // and defines a callback function to handle the request.
@@ -109,12 +128,27 @@ router.get("/myDrive", authenticateToken, function (req, res) {
 // and sends back the contents of a file named 'login.html' located in a 'public' folder.
 router.get("/login", function (req, res) {
   res.setHeader("Content-type", "text/html");
-  res.sendFile(__dirname + "/" + "public/login.html");
+  res.sendFile(join(__dirname, "views", "login.html"));
+});
+
+router.get("/logout", function (req, res) {
+  const refreshToken = req.cookies.refreshToken;
+  const accessToken = req.cookies.accessToken;
+  // Expire tokens
+  res.cookie('accessToken', accessToken, { httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    expires: new Date(0) });
+  res.cookie('refreshToken', refreshToken, { httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    expires: new Date(0) });
+  res.redirect("/login");
 });
 
 router.get("/signup", function (req, res) {
   res.setHeader("Content-type", "text/html");
-  res.sendFile(__dirname + "/" + "public/signup.html");
+  res.sendFile(join(__dirname, "views", "signup.html"));
 });
 
 // This code sets up a new route for a POST request to the '/login' path,
@@ -147,8 +181,25 @@ router.post("/login", async (req, res) => {
     console.log("Passwords match, authenticate user");
 
     // Generate JWT token
-    const token = jwt.sign({ userId: user[0]._id }, 'secret', { expiresIn: '1h' });
-    res.status(200).json({ token: token });
+    const accessToken = generateAccessToken(user[0]._id);
+    const refreshToken = generateRefreshToken(user[0]._id);
+
+    // Store access and refresh tokens in httpOnly cookies
+    res.cookie('accessToken', accessToken, { httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+    expires: new Date(Date.now() + 15 * 60 * 1000) }); // 15 minutes
+
+    res.cookie('refreshToken', refreshToken, { httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }); // 30 days
+
+    // Store refresh token in database
+    await UpdateRefreshToken(user[0]._id, refreshToken);
+    console.log("User authenticated, redirect to main page");
+    res.redirect("/");
+    // res.status(200).json({ message: "Logged in successfully" });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server error' });
@@ -160,7 +211,6 @@ router.post("/signup", async (req, res) => {
     const username = req.body.username;
     const password = req.body.password;
     var basedir = join(req.body.basedir || os.homedir(), "MyCloudDrive", username);
-    console.log(basedir);
 
     // Sanitize and validate user inputs
     if (!isValidInput(username, password)) {
@@ -232,7 +282,7 @@ router.get("/basedir", authenticateToken, (req, res) => {
     res.sendStatus(401);
   } else {
     GetBaseDir(decoded.userId).then((data) => {
-      res.send(data);
+      res.send({baseDir: data});
     });
   }
 });
@@ -284,21 +334,8 @@ router.post("/currdir", authenticateToken, (req, res) => {
   }
 });
 
-router.get("/fileCollection", authenticateToken, (req, res) => {
-  const decoded = req.decoded;
-  if (!decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  }
-  res.send(fileCollection);
-});
-
-router.get("/userCollection", authenticateToken, (req, res) => {
-  res.send(userCollection);
-});
-
-router.get("/download", authenticateToken, (req, res) => {
-  const fileId = req.query.fileId;
+router.post("/download", authenticateToken, (req, res) => {
+  const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
     const path = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
     if (file[0].isDirectory) {
@@ -331,13 +368,13 @@ router.get("/download", authenticateToken, (req, res) => {
   });
 });
 
-router.get("/file-rename", authenticateToken, (req, res) => {
-  const fileId = req.query.fileId;
-  const newName = req.query.newName;
+router.post("/file-rename", authenticateToken, (req, res) => {
+  const fileId = req.body.fileId;
+  const newName = req.body.newName;
   GetDocumentById(fileId, "files").then((file) => {
     // Rename file here
     RenameFile(file[0], newName).then(() => {
-      res.send(file[0].fileName + file[0].fileExt + " renamed to " + newName);
+      res.status(200).send(file[0].fileName + file[0].fileExt + " renamed to " + newName);
     });
   });
 });
@@ -363,19 +400,19 @@ router.post("/file-move", authenticateToken, (req, res) => {
 router.get("/file-info", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
   GetDocumentById(fileId, "files").then((file) => {
-    res.send(file[0]);
+    res.status(200).send(file[0]);
   });
 });
 
-router.get("/isfavourited", authenticateToken, (req, res) => {
-  const fileId = req.query.fileId;
+router.post("/isfavourited", authenticateToken, (req, res) => {
+  const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
     res.send({"isFavourited": file[0].isFavourited});
   });
 });
 
-router.get("/toggle-favourite", authenticateToken, (req, res) => {
-  const fileId = req.query.fileId;
+router.post("/toggle-favourite", authenticateToken, (req, res) => {
+  const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
     // Toggle favourite here
     UpdateDocument(file[0], {"isFavourited": !file[0].isFavourited}, "files").then(() => {
@@ -503,6 +540,18 @@ router.post("/upload", authenticateToken, upload.array("files"), async (req, res
   }
 });
 
+router.get('/last-sync', authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    GetDocumentById(decoded.userId, "users").then((user) => {
+      res.status(200).send(user[0].userDefaults.lastSync);
+    });
+  }
+});
+
 router.get('/sync', authenticateToken, (req, res) => {
   // Sync filesystem with database
   var decoded = req.decoded;
@@ -512,7 +561,11 @@ router.get('/sync', authenticateToken, (req, res) => {
   } else {
     GetBaseDir(decoded.userId).then((baseDir) => {
       SyncDBWithFilesystem(baseDir, decoded.userId).then(() => {
-        res.status(201).send("Synced filesystem with database");
+        // Update last sync time in user document
+        GetDocumentById(decoded.userId, "users").then((user) => {
+          UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
+          res.status(201).send("Synced filesystem with database");
+        });
       });
     });
   }
@@ -560,6 +613,20 @@ router.post("/file-search", authenticateToken, (req, res) => {
     console.log(err);
     res.status(500).json({ message: err.message });
   }
+});
+
+// Catch errors and serve the appropriate error page
+router.get((req, res, next) => {
+  const status = err.status || 500;
+  res.status(status);
+  console.log(status);
+  res.sendFile(join(__dirname, "views", `${status}.html`));
+});
+
+// Catch all other routes and return 404
+router.get("*", (req, res, next) => {
+  console.log("404");
+  res.sendFile(join(__dirname, "views", "404.html"));
 });
 
 

@@ -1,5 +1,5 @@
 import { stat as _stat } from 'fs';
-import { GetDocumentById, InsertDocument, QueryCollection, GetDBSchema } from './dbops.js';
+import { GetDocumentById, InsertDocument, QueryCollection, GetDBSchema, UpdateDocument } from './dbops.js';
 import { hashPassword } from './crypt.js';
 
 const collectionName = "users";
@@ -34,12 +34,6 @@ async function NewUser(userName, userPass, basedir) {
   }
 }
 
-async function UpdateLastSync(userId) {
-  const user = await GetUserById(userId);
-  user[0].userDefaults.lastSync = new Date();
-  return await UpdateDocument(user, collectionName);
-}
-
 function GetUserById(id) {
   return GetDocumentById(id, collectionName);
 }
@@ -51,13 +45,23 @@ async function GetUserByCreds(userName) {
 
 async function GetBaseDir(userId) {
   const user = await GetDocumentById(userId, collectionName);
+  console.log(user[0].userDefaults.baseDir);
   return user[0].userDefaults.baseDir;
 }
 
 async function GetCurrDir(userId) {
   const user = await GetDocumentById(userId, collectionName);
+  if (user[0].userDefaults.currDir == null) {
+    UpdateDocument(user[0], { ["userDefaults.currDir"]: user[0].userDefaults.baseDir }, collectionName);
+    return user[0].userDefaults.baseDir;
+  }
   return user[0].userDefaults.currDir;
 }
 
+async function UpdateRefreshToken(userId, refreshToken) {
+  const user = await GetDocumentById(userId, collectionName);
+  return await UpdateDocument(user[0], { refreshToken: refreshToken }, collectionName);
+}
 
-export { NewUser, GetBaseDir, GetCurrDir, GetUserById, GetUserByCreds };
+
+export { NewUser, GetBaseDir, GetCurrDir, GetUserById, GetUserByCreds, UpdateRefreshToken, };

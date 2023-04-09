@@ -2,11 +2,14 @@ import express from "express";
 import https from "https";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import cors from "cors";
+import helmet from "helmet";
 import bodyParser from "body-parser";
 import router from "./router.js";
 import { updateAllCollections } from "../database/dbops.js";
 import { dirname, join } from "path";
 import { setup } from "./setup.js";
+import cookieParser from "cookie-parser";
 
 // Initialise middleware
 let app = express();
@@ -19,9 +22,39 @@ const sslOptions = {
   cert: fs.readFileSync(join(__dirname, "server.cert")),
 }
 
-app.use(express.static(join(__dirname, "public")));
+
+// Body parser middleware to parse request body
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+
+app.use(cookieParser());
+
+// CORS middleware to allow cross-origin requests
+app.use(cors({
+  origin: "https://localhost:8081",
+  credentials: true,
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// Helmet middleware to set CSP headers
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"], // Allow content from the same origin
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'], // Allow images from the same origin and data URIs
+        fontSrc: ["'self'"],
+      },
+    },
+  })
+  );
+
+app.use(express.static(join(__dirname, "public")));
+
+// Use the router middleware for all requests
 app.use(router);
 
 // Define Constants

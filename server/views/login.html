@@ -3,22 +3,22 @@
   <head>
     <link rel="stylesheet" type="text/css" href="/css/login.css">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script defer src="/js/login.js" type="module"></script>
   </head>
   <body>
     <div class="container">
-      <form onsubmit="return submitForm(event)">
+      <form id="loginForm">
         <h2>Login</h2>
         <div class="input-field">
-          <input type="text" id="username" placeholder="Username" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+          <input type="text" id="username" placeholder="Username">
         </div>
         <div class="input-field">
-          <input type="password" id="password" placeholder="Password" onfocus="highlightField(this)" onblur="removeHighlight(this)">
+          <input type="password" id="password" placeholder="Password">
         </div>
         <div class="error-message" id="errorMessage"></div>
-        <button type="submit" onmousedown="pressButton(this)" onmouseup="releaseButton(this)">Login</button>
+        <button type="submit">Login</button>
       </form>
       <p id="signup-link">Don't have an account? Sign Up</p>
     </div>
-    <script src="/js/login.js"></script>
   </body>
 </html>

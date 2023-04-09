@@ -1,4 +1,4 @@
-import { BytesToSize, ConvertDate, truncatePath } from './helperfuncs.js';
+import { BytesToSize, ConvertDate, truncatePath, fetchWithAuth } from './helperfuncs.js';
 
 // Store the current directory
 let currDir = null;
@@ -6,18 +6,6 @@ let moveCurrDir = null;
 let userPreferences;
 let username;
 let baseDir;
-
-async function handleResponse(response, customMessage = "Internal Server Error") {
-  if (response.ok) {
-    return response.json();
-  } else if (response.status === 401) {
-    const error = await response.text();
-    redirectToLogin();
-  } else {
-    const error = await response.text();
-    throw new Error(error);
-  }
-}
 
 /**
  * Initialize the grid view with the files and folders at the given path.
@@ -59,7 +47,7 @@ async function init_grid(path, documents = null) {
 
     if (files.length === 0) {
       const emptyMessage = document.createElement("div");
-      emptyMessage.innerHTML = "Your Drive is empty!<br>Upload some files to get started.";
+      emptyMessage.textContent = "Your Drive is empty! Upload some files to get started.";
       emptyMessage.id = "empty-drive-message";
       emptyMessage.className = "empty-drive-message center";
       oldGrid.replaceWith(emptyMessage);
@@ -359,12 +347,18 @@ const createSlider = (key, prefValue, prefOptions) => {
   const slider = document.createElement("input");
   slider.type = "range";
   slider.id = key;
-  slider.className = "prefType-slider";
+  slider.className = "prefType-slider range-slider";
   slider.min = prefOptions[0].min;
   slider.max = prefOptions[0].max;
   slider.value = prefValue;
+  slider.style.background = `linear-gradient(to right, #00B6FF 0%, #00B6FF ${prefValue}%, #d3d3d3 ${prefValue}%, #d3d3d3 100%)`;
   slider.addEventListener("click", (e) => {
     updatePreference(e);
+  });
+
+  slider.addEventListener("input", function() {
+    let value = (this.value - this.min) / (this.max - this.min) * 100;
+    this.style.background = `linear-gradient(to right, #00B6FF 0%, #00B6FF ${value}%, #d3d3d3 ${value}%, #d3d3d3 100%)`;
   });
 
   return slider;
@@ -396,56 +390,23 @@ const updatePreference = async (e) => {
     const prefName = e.target.id;
     const prefType = extractPrefType(e.target);
     const newValue = getNewValueFromEvent(e, prefType);
-
-    const response = await fetch('/update-preference', {
+    const response = await fetchWithAuth('/update-preference', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + localStorage.getItem('token'),
       },
       body: JSON.stringify({
         prefKey: prefName,
         newValue: newValue,
       }),
-    });
+    }).then((res) => {res.json()});
 
-    const data = await response.json();
     LoadPage(true);
-    return data;
+    return response;
   } catch (error) {
     console.error('Error updating preferences:', error);
   }
 };
-
-
-
-// const updatePreference = async (e) => {
-//   try {
-//     const prefName = e.target.id;
-//     const newValue = e.target.textContent;
-//     console.log("prefName: ", prefName);
-//     console.log("newValue: ", newValue);
-
-//     const response = await fetch("/update-preferences", {
-//       method: "POST",
-//       headers: {
-//         "Content-Type": "application/json",
-//         Authorization: "Bearer " + localStorage.getItem("token"),
-//       },
-//       body: JSON.stringify({
-//         prefKey: prefName,
-//         newValue: newValue,
-//       }),
-//     });
-
-//     const data = await response.json();
-//     LoadPage();
-//     return data;
-//   } catch (error) {
-//     console.error("Error updating preferences:", error);
-//   }
-// };
-
 
 /**
  * Get the relative path for the given path, replacing the base directory with "My Cloud".
@@ -458,7 +419,7 @@ async function GetRelativePath(path) {
     const relPath = path.replace(baseDir, "My Cloud");
     return relPath;
   } catch (error) {
-    redirectToLogin();
+    // redirectToLogin();
     throw error;
   }
 }
@@ -480,17 +441,9 @@ function GetPreviousDir(path) {
  */
 async function GetFavourites() {
   try {
-    const response = await fetch("/get-favourites", {
+    const response = await fetchWithAuth("/get-favourites", {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
     });
-
-    if (response.status !== 200) {
-      return [];
-    }
 
     const favourites = await response.json();
     return favourites;
@@ -502,12 +455,8 @@ async function GetFavourites() {
 
 async function GetPreferences() {
   try {
-    const response = await fetch("/get-preferences", {
+    const response = await fetchWithAuth("/get-preferences", {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
     });
 
     if (response.status !== 200) {
@@ -524,11 +473,10 @@ async function GetPreferences() {
 
 async function SearchForFiles(searchTerm) {
   try {
-    const response = await fetch("/file-search", {
+    const response = await fetchWithAuth("/file-search", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
       },
       body: JSON.stringify({ searchTerm }),
     });
@@ -552,17 +500,13 @@ async function SearchForFiles(searchTerm) {
  */
 async function fetchFilesMetadata(path) {
   try {
-    const filesResponse = await fetch("/metadata?path=" + path, {
+    const filesResponse = await fetchWithAuth("/metadata?path=" + path, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
     });
 
     if (filesResponse.status !== 200) {
       if (filesResponse.status === 401) {
-        redirectToLogin();
+        // redirectToLogin();
       }
       return null;
     }
@@ -582,11 +526,10 @@ async function fetchFilesMetadata(path) {
  */
 async function updateCurrentDir(path) {
   try {
-    const currDirResponse = await fetch("/currdir", {
+    const currDirResponse = await fetchWithAuth("/currdir", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
       },
       body: JSON.stringify({ currDir: path }),
     });
@@ -604,32 +547,18 @@ async function updateCurrentDir(path) {
 
 async function getCurrentDir() {
   try {
-    const currDirResponse = await fetch("/currdir", {
+    const response = await fetchWithAuth("/currdir", {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + localStorage.getItem("token"),
-      },
-    });
+    }).then((res) => res.json());
 
-    if (currDirResponse.status !== 200) {
-      return null;
-    }
-    const response = await currDirResponse.json();
+    // const response = await currDirResponse.json();
+    console.log(response.currDir);
     const currDir = response.currDir;
     return currDir;
   } catch (error) {
     console.error("Error getting current directory:", error);
     return null;
   }
-}
-
-/**
- * Redirect the user to the login page.
- */
-function redirectToLogin() {
-  console.log("Uh oh, you can't view this content!");
-  window.location.href = "/login";
 }
 
 // Additional helper functions for creating grid items and favourite items were omitted in the previous response.
@@ -890,21 +819,55 @@ var toggleUserPanel = (e) => {
   }
 }
 
-var downloadFile = (e, file) => {
+// var downloadFile = (e, file) => {
+//   const token = localStorage.getItem('token'); // Get the JWT token from localStorage
+
+//   fetch(`/download?fileId=${file._id}`, {
+//     method: 'GET',
+//     headers: {
+//       'Authorization': `Bearer ${token}` // Send the JWT token in the Authorization header
+//     }
+//   })
+//   .then(response => {
+//     if (!response.ok) {
+//       throw new Error('Network response was not ok');
+//     }
+//     return response.blob(); // Return the blob data from the response
+//   })
+//   .then(blob => {
+//     // Create a URL for the blob data
+//     const url = window.URL.createObjectURL(blob);
+
+//     // Create a link and click it to download the file
+//     const link = document.createElement('a');
+//     link.href = url;
+//     link.setAttribute('download', `${file.fileName}${file.fileExt}`);
+//     document.body.appendChild(link);
+//     link.click();
+//   })
+//   .catch(error => {
+//     console.error('There was a problem with the fetch operation:', error);
+//   });
+// }
+
+async function downloadFile(e, file) {
   const token = localStorage.getItem('token'); // Get the JWT token from localStorage
 
-  fetch(`/download?fileId=${file._id}`, {
-    headers: {
-      'Authorization': `Bearer ${token}` // Send the JWT token in the Authorization header
-    }
-  })
-  .then(response => {
+  try {
+    const response = await fetchWithAuth('/download', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fileId: file._id }),
+    });
+
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }
-    return response.blob(); // Return the blob data from the response
-  })
-  .then(blob => {
+
+    const blob = await response.blob(); // Get the blob data from the response
+
     // Create a URL for the blob data
     const url = window.URL.createObjectURL(blob);
 
@@ -914,25 +877,25 @@ var downloadFile = (e, file) => {
     link.setAttribute('download', `${file.fileName}${file.fileExt}`);
     document.body.appendChild(link);
     link.click();
-  })
-  .catch(error => {
+  } catch (error) {
     console.error('There was a problem with the fetch operation:', error);
-  });
+  }
 }
 
 
-var deleteFile = (e, file) => {
-  fetch("/file-delete?fileId=" + file._id, {
-    method: "GET",
+
+var deleteFile = async (e, file) => {
+  const response = await fetchWithAuth('/file-delete', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
-    }
-  }).then((res) => res.text()).then((data) => {
-      hideDeleteConfirm(e, file);
-      getTotalStorage();
-      init_grid(currDir);
-  });
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fileId: file._id }),
+  }).then((res) => res.text());
+
+  hideDeleteConfirm(e, file);
+  getTotalStorage();
+  init_grid(currDir);
 }
 
 var showDeleteConfirm = (e, file) => {
@@ -978,16 +941,16 @@ const showFileInfo = (e, file) => {
   setTimeout(() => {
     fileInfo.style.opacity = 1;
   }, 0);
-  fileInfoTitle.innerHTML = file.fileName;
-  fileInfoItems[1].innerHTML = "Size: " + BytesToSize(file.fileSize);
+  fileInfoTitle.textContent = file.fileName;
+  fileInfoItems[1].textContent = "Size: " + BytesToSize(file.fileSize);
   if (file.isDirectory) {
-    fileInfoItems[2].innerHTML = "Type: Folder";
+    fileInfoItems[2].textContent = "Type: Folder";
   } else {
-    fileInfoItems[2].innerHTML = "Type: " + file.fileExt;
+    fileInfoItems[2].textContent = "Type: " + file.fileExt;
   }
-  fileInfoItems[3].innerHTML = "Last Modified: " + ConvertDate(file.lastModified);
-  fileInfoItems[4].innerHTML = "Uploaded: " + ConvertDate(file.uploadDate);
-  fileInfoItems[5].innerHTML = "Favourite: " + file.isFavourited;
+  fileInfoItems[3].textContent = "Last Modified: " + ConvertDate(file.lastModified);
+  fileInfoItems[4].textContent = "Uploaded: " + ConvertDate(file.uploadDate);
+  fileInfoItems[5].textContent = "Favourite: " + file.isFavourited;
 
   window.addEventListener("click", hideFileInfo);
 };
@@ -1001,24 +964,21 @@ const hideFileInfo = (e, file) => {
     setTimeout(function() {
       fileInfo.classList.add("hidden");
     }, 200);
-    // removeEventListenerIfExists("close-file-info", "click", "hideFileInfo");
     window.removeEventListener("click", hideFileInfo);
   }
 };
 
 
-var favouriteFile = (e, file) => {
-  fetch("/toggle-favourite?fileId=" + file._id, {
-    method: "GET",
+var favouriteFile = async (e, file) => {
+  const response = await fetchWithAuth('/toggle-favourite', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
-  }).then((res) => {
-    return res.json();
-  }).then(() => {
-    init_favourite_list();
-  });
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ fileId: file._id }),
+  }).then((res) => res.json());
+
+  init_favourite_list();
 };
 
 const renameFile = (e, file) => {
@@ -1048,27 +1008,21 @@ const renameFile = (e, file) => {
     }
   };
 
-  var keyEnterEvent = (e) => {
+  var keyEnterEvent = async (e) => {
     if (e.key === "Enter") {
-      fileName.innerHTML = editFileInputField.value;
+      fileName.textContent = editFileInputField.value;
       editFileInputField.style.display = "none";
 
-      const params = new URLSearchParams({
-        fileId: file._id,
-        newName: editFileInputField.value
-      });
-
-      fetch("/file-rename?" + params, {
-        method: "GET",
+      const result = await fetchWithAuth("/file-rename", {
+        method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + localStorage.getItem("token"),
-        }
-      }).then((res) => {
-        return res.text();
-      }).then((data) => {
-        console.log(data);
-      });
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fileId: file._id,
+          newName: editFileInputField.value
+        })
+      }).then((res) => res.text());
       editFileInputField.removeEventListener("keydown", keyEnterEvent);
       window.removeEventListener("click", hideInputField);
     }
@@ -1088,11 +1042,10 @@ const moveFile = async (e, file) => {
     moveFileContainer.classList.add("hidden");
   }, 150);
 
-  const result = await fetch("/file-move", {
+  const result = await fetchWithAuth("/file-move", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
       fileId: file._id,
@@ -1130,15 +1083,14 @@ const showContextMenu = async (e, file) => {
   addEventListenerAndStore("move-file", "click", "showMoveFileListener", showMoveFile.bind(null, e, file));
 
   const favouriteItem = document.getElementById("favourite-file");
-  const res = await fetch("/isfavourited?fileId=" + file._id, {
-    method: "GET",
+  const result = await fetchWithAuth("/isfavourited", {
+    method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + localStorage.getItem("token"),
+      "Content-Type": "application/json"
     },
-  });
-  const data = await res.json();
-  favouriteItem.innerHTML = data.isFavourited ? "Unfavourite" : "Favourite";
+    body: JSON.stringify({fileId: file._id})
+  }).then((res) => res.json());
+  favouriteItem.textContent = result.isFavourited ? "Unfavourite" : "Favourite";
 
   const contextMenu = document.getElementById("context-menu");
   const contextMenuItems = contextMenu.querySelectorAll(".context-menu-item");
@@ -1247,19 +1199,12 @@ const uploadFiles = async (files) => {
   formData.append("filePaths", JSON.stringify(filePaths));
   console.log(filePaths);
 
-  fetch("/upload", {
+  const result = await fetchWithAuth("/upload", {
     method: "POST",
-    headers: {
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    },
     body: formData
-  }).then((res) => {
-    console.log(res);
-    getTotalStorage();
-    init_grid(currDir);
-  }).catch((err) => {
-    console.log(err);
-  });
+  }).then((res) => res.json());
+  getTotalStorage();
+  init_grid(currDir);
 };
 
 const fileSearch = async (e) => {
@@ -1384,28 +1329,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 var getBaseDir = async () => {
-  const result = await fetch("/basedir", {
+  const result = await fetchWithAuth("/basedir", {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
-  }).then((res) => res.text());
-  return result;
+  }).then((res) => res.json());
+  const baseDir = result.baseDir;
+  return baseDir;
 }
 
 function logout() {
-  localStorage.removeItem("token");
-  window.location.href = "/login";
+  const result = fetch("/logout", {
+    method: "GET",
+    credentials: "include",
+  }).then(() => {
+    window.location.href = "/login";
+  })
+
 }
 
-async function getTotalStorage() {
-  var storageInfo = await fetch("/storage-info", {
+async function getLastSync() {
+  const result = await fetchWithAuth("/last-sync", {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
+  }).then((res) => res.json());
+  // Update last sync on page
+  const readableDate = await ConvertDate(result);
+  var lastSyncElement = document.getElementById("last-updated");
+  lastSyncElement.textContent = `Last Updated: ${readableDate}`;
+  return result;
+}
+
+function startLastSyncInterval() {
+  // Call the function immediately to update the text element
+  getLastSync();
+
+  // Set up the interval to call getLastSync every minute
+  setInterval(getLastSync, 60000);
+}
+
+startLastSyncInterval();
+
+
+async function getTotalStorage() {
+  const storageInfo = await fetchWithAuth("/storage-info", {
+    method: "GET",
   }).then((res) => res.json());
   var totalStorage = storageInfo.totalStorage * (userPreferences.storageAllocation.prefValue / 100);
   var usedStorage = storageInfo.usedStorage;
@@ -1435,12 +1400,8 @@ async function getTotalStorage() {
 }
 
 async function SyncWithServer() {
-  const result = await fetch("/sync", {
+  const result = await fetchWithAuth("/sync", {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
   });
   if (result.status == 201) {
     console.log("Sync Complete!");
@@ -1453,23 +1414,19 @@ async function LoadPage(soft = false) {
   let path;
   userPreferences = await GetPreferences();
   baseDir = await getBaseDir();
-  currDir = await getCurrentDir();
+  currDir = await getCurrentDir() || baseDir;
   if (soft) path = currDir;
   else path = baseDir;
   console.log("Current Directory: " + path);
-  init_move_list(path);
+  init_move_list(baseDir);
   init_grid(path);
   init_favourite_list();
   getTotalStorage();
 }
 
 async function GetUsername() {
-  const result = await fetch("/username", {
+  const result = await fetchWithAuth("/username", {
     method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + localStorage.getItem("token"),
-    }
   }).then((res) => res.json());
   return result;
 }
@@ -1481,4 +1438,5 @@ window.onload = async () => {
   await LoadPage();
   username = await GetUsername();
   document.getElementById("user-panel-username").textContent = `${username}'s Cloud`;
+  startLastSyncInterval();
 };

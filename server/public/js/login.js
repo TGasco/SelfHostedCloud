@@ -1,58 +1,29 @@
+import { fetchWithAuth, } from "./helperfuncs.js";
+
 function submitForm(event) {
-    event.preventDefault();
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
+  event.preventDefault();
+  const username = document.getElementById("username").value;
+  const password = document.getElementById("password").value;
 
-    const errorMessage = document.getElementById("errorMessage");
+  const errorMessage = document.getElementById("errorMessage");
 
-    // Check if the username and password are correct
-    fetch("/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        "username": username,
-        "password": password
-      })
+  // Check if the username and password are correct
+  fetch("/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      "username": username,
+      "password": password
     })
-    .then(res => {
-      if (res.status === 200) {
-        res.json().then(data => {
-          // Save the token, e.g., in the local storage
-          localStorage.setItem("token", data.token);
-          // Redirect the user to the homepage
-          redirectToHomepage();
-        });
-      } else {
-        console.log(res);
-        errorMessage.innerText = "Incorrect username or password";
-        errorMessage.classList.add('show');
-        return;
-      }
-    });
-  }
-
-  function redirectToHomepage() {
-    fetch('/myDrive', {
-      method: 'GET',
-      redirect: 'manual',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + localStorage.getItem('token')
-      }
-    })
-    .then(response => {
-      if (response.status === 200) {
-        // Redirect the user to the homepage
-        window.location.href = "/";
-        // window.location.href = "/myDrive";
-      } else {
-        // Handle error scenarios
-        console.log("Error:", response.status, response.statusText);
-      }
-    });
-  }
+  })
+  .then(res => {
+    if (res.status === 200) {
+      window.location.href = "/";
+    }
+  });
+}
 
   function redirectToSignup() {
     window.location.href = "/signup";
@@ -106,4 +77,30 @@ function signUp(event) {
     button.style.transform = "translateY(0)";
   }
 
-document.getElementById("signup-link").addEventListener("click", redirectToSignup);
+document.addEventListener('DOMContentLoaded', () => {
+  let form;
+  try {
+    form = document.getElementById('loginForm');
+    form.addEventListener('submit', submitForm);
+  } catch (e) {
+    form = document.getElementById('signupForm');
+    form.addEventListener('submit', signUp);
+  }
+  const usernameInput = document.getElementById('username');
+  const passwordInput = document.getElementById('password');
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  try {
+    const signupLink = document.getElementById('signup-link');
+    signupLink.addEventListener('click', redirectToSignup);
+  } catch (e) {
+    // We are on the signup page, do nothing
+  }
+
+  usernameInput.addEventListener('focus', () => highlightField(usernameInput));
+  usernameInput.addEventListener('blur', () => removeHighlight(usernameInput));
+  passwordInput.addEventListener('focus', () => highlightField(passwordInput));
+  passwordInput.addEventListener('blur', () => removeHighlight(passwordInput));
+  submitButton.addEventListener('mousedown', () => pressButton(submitButton));
+  submitButton.addEventListener('mouseup', () => releaseButton(submitButton));
+});

@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { MongoClient } from 'mongodb';
+import crypto from 'crypto';
 
 function checkEnvSetup() {
-    if (fs.existsSync(path.join(process.cwd(), '.env-setup'))) {
+    if (fs.existsSync(path.join(process.cwd(), '.env'))) {
         return true;
     } else {
         return false;
@@ -31,14 +32,39 @@ async function setupMongoDB() {
   }
 }
 
+async function generateSecrets() {
+  // Generate a random 32-byte secret for Access Tokens
+  var accessTokenSecret = crypto.randomBytes(32).toString('hex');
+  // Generate a random 32-byte secret for Refresh Tokens
+  var refreshTokenSecret = crypto.randomBytes(32).toString('hex');
+  // Write the secrets to the .env file
+  fs.writeFileSync(path.join(process.cwd(), '.env'), `ACCESS_TOKEN_SECRET=${accessTokenSecret}\nREFRESH_TOKEN_SECRET=${refreshTokenSecret}`);
+  // unset the secrets from memory
+  accessTokenSecret = null;
+  refreshTokenSecret = null;
+  console.log('Secrets generated');
+}
+
 export async function setup() {
     if (checkEnvSetup()) {
         console.log('Environment already set up');
+        // Set the environment variables
+        const env = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf8');
+        const envVars = env.split('\n'); // Split the file into an array of lines
+        envVars.forEach(line => {
+            const [key, value] = line.split('='); // Split each line into an array of [key, value]
+            process.env[key] = value; // Set the environment variable
+        });
         return;
     } else {
       await setupMongoDB();
-
-      fs.writeFileSync(path.join(process.cwd(), '.env-setup'), '');
+      await generateSecrets();
+      const env = fs.readFileSync(path.join(process.cwd(), '.env'), 'utf8');
+        const envVars = env.split('\n'); // Split the file into an array of lines
+        envVars.forEach(line => {
+            const [key, value] = line.split('='); // Split each line into an array of [key, value]
+            process.env[key] = value; // Set the environment variable
+        });
       console.log('Environment set up complete');
     }
 

@@ -1,6 +1,7 @@
 // This code imports the Express.js module and creates a new router object.
 import express from "express";
 import multer from "multer";
+import mime from "mime";
 import { join, dirname, basename } from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -12,20 +13,16 @@ import { GetDocumentById, UpdateDocument, InsertDocument, RemoveDocument, QueryC
 import jwt from "jsonwebtoken";
 import { comparePasswords, isValidInput } from "../database/crypt.js";
 
-let router = express.Router();
+const router = express.Router();
 
 const storage = multer.diskStorage({
   preservePath: true,
   destination: async (req, file, callback) => {
-    var targetPath;
+    let targetPath;
     // Get the current directory from collection
     const currDir = await GetCurrDir(req.decoded.userId);
     const dirPath = dirname(file.originalname);
-    if (dirPath == ".") {
-      targetPath = currDir;
-    } else {
-      targetPath = join(currDir, dirPath);
-    }
+    targetPath = dirPath == "." ? currDir : join(currDir, dirPath);
     callback(null, targetPath);
   },
   filename: (req, file, callback) => {
@@ -34,7 +31,7 @@ const storage = multer.diskStorage({
   }
 });
 
-let upload = multer({ storage: storage });
+const upload = multer({ storage: storage });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -46,20 +43,15 @@ function authenticateToken(req, res, next) {
 
   // If token is not present, return 401
   if (!token) {
-    // Redirect user to login page
-    const error = new Error("Unauthorized");
-    error.status = 401;
+    req.decoded = null;
     return next();
-    // res.redirect("/login");
-    // return res.sendStatus(401);
   }
 
   // If token is present, verify it
-  // Change "secret" to process.env.JWT_SECRET
-  jwt.verify(token, "accessSecret", (err, decoded) => {
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
       // Redirect user to login page
-
+      console.log("Token verification failed!");
       res.sendStatus(401);
     } else {
       req.decoded = decoded;
@@ -72,20 +64,36 @@ router.post('/token', async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) return res.sendStatus(401);
 
-  const user = await QueryCollection({ refreshToken: refreshToken }, userCollection);
+  // const user = await QueryCollection({ refreshToken }, userCollection);
 
-  if (!user) return res.sendStatus(403);
+  // if (!user) return res.sendStatus(403);
 
-  jwt.verify(refreshToken, 'refreshSecret', (err, user) => {
+  jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
 
-    const accessToken = generateAccessToken(user.userId);
+    generateAccessToken(user.userId, process.env.ACCESS_TOKEN_SECRET).then(accessToken => {
+      res.cookie('accessToken', accessToken, { httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+        expires: new Date(Date.now() + 15 * 60 * 1000) }); // 15 minutes
+      res.json({ accessToken });
+    });
+  });
+});
+
+router.get("/token-refresh", authenticateToken, async (req, res) => {
+  // Check auth status
+  if (!req.decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    const accessToken = await generateAccessToken(req.decoded.userId, process.env.ACCESS_TOKEN_SECRET);
     res.cookie('accessToken', accessToken, { httpOnly: true,
       secure: true,
       sameSite: 'strict',
       expires: new Date(Date.now() + 15 * 60 * 1000) }); // 15 minutes
-    res.json({ accessToken });
-  });
+    res.sendStatus(200).json({ accessToken });
+  }
 });
 
 router.get("/username", authenticateToken, async function (req, res) {
@@ -109,11 +117,6 @@ router.get("/", authenticateToken, function (req, res) {
     res.redirect("/login");
   } else {
     console.log("User authenticated! Serving index.html...");
-
-    // Set headers to prevent caching
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
 
     res.setHeader("Content-Type", "text/html");
     res.setHeader("status", "200");
@@ -154,6 +157,57 @@ router.get("/signup", function (req, res) {
 // This code sets up a new route for a POST request to the '/login' path,
 // and defines a callback function to handle the request.
 // The callback function sends a response with the message 'Login successful'.
+// router.post("/login", async (req, res) => {
+//   try {
+//     const username = req.body.username;
+//     const password = req.body.password;
+
+//     // Sanitize and validate user inputs
+//     if (!isValidInput(username, password)) {
+//       console.log("Invalid input");
+//       return res.status(400).json({ message: 'Invalid input' });
+//     }
+
+//     const user = await GetUserByCreds(username);
+//     // If user not found, return error
+//     if (!user[0]) {
+//       console.log("User not found");
+//       return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+//     console.log("User found, compare passwords");
+//     // Compare password hashes
+//     const passMatch = await comparePasswords(password, user[0].userPass);
+
+//     if (!passMatch) {
+//       return res.status(401).json({ message: 'Invalid credentials' });
+//     }
+//     console.log("Passwords match, authenticate user");
+
+//     // Generate JWT token
+//     const refreshToken = await generateRefreshToken(user[0]._id, process.env.REFRESH_TOKEN_SECRET)
+//     res.cookie('refreshToken', refreshToken, { httpOnly: true,
+//       secure: true,
+//       sameSite: 'strict',
+//       expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) }); // 14 days
+
+//     const accessToken = await generateAccessToken(user[0]._id, process.env.ACCESS_TOKEN_SECRET)
+//     console.log("Access token generated");
+//     // Store access and refresh tokens in httpOnly cookies
+//     res.cookie('accessToken', accessToken, { httpOnly: true,
+//       secure: true,
+//       sameSite: 'strict',
+//       expires: new Date(Date.now() + 15 * 60 * 1000) });
+//     console.log("User authenticated, redirect to main page");
+//     res.redirect("/");
+
+
+//   } catch (err) {
+//     console.error(err.message);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// });
+
+
 router.post("/login", async (req, res) => {
   try {
     const username = req.body.username;
@@ -180,37 +234,37 @@ router.post("/login", async (req, res) => {
     }
     console.log("Passwords match, authenticate user");
 
-    // Generate JWT token
-    const accessToken = generateAccessToken(user[0]._id);
-    const refreshToken = generateRefreshToken(user[0]._id);
+    // Generate JWT tokens
+    const [accessToken, refreshToken] = await Promise.all([
+      generateAccessToken(user[0]._id, process.env.ACCESS_TOKEN_SECRET),
+      generateRefreshToken(user[0]._id, process.env.REFRESH_TOKEN_SECRET)
+    ]);
 
-    // Store access and refresh tokens in httpOnly cookies
+    // Set access and refresh tokens in httpOnly cookies
     res.cookie('accessToken', accessToken, { httpOnly: true,
       secure: true,
       sameSite: 'strict',
-    expires: new Date(Date.now() + 15 * 60 * 1000) }); // 15 minutes
-
+      expires: new Date(Date.now() + 15 * 60 * 1000) });
     res.cookie('refreshToken', refreshToken, { httpOnly: true,
       secure: true,
       sameSite: 'strict',
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) }); // 30 days
+      expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) });
 
-    // Store refresh token in database
-    await UpdateRefreshToken(user[0]._id, refreshToken);
     console.log("User authenticated, redirect to main page");
     res.redirect("/");
-    // res.status(200).json({ message: "Logged in successfully" });
+
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+
 router.post("/signup", async (req, res) => {
   try {
     const username = req.body.username;
     const password = req.body.password;
-    var basedir = join(req.body.basedir || os.homedir(), "MyCloudDrive", username);
+    const basedir = join(req.body.basedir || os.homedir(), "MyCloudDrive", username);
 
     // Sanitize and validate user inputs
     if (!isValidInput(username, password)) {
@@ -245,26 +299,40 @@ router.post("/signup", async (req, res) => {
 });
 
 // GET Requests
-router.get("/metadata", authenticateToken, (req, res) => {
+router.get("/metadata", authenticateToken, async (req, res) => {
   const decoded = req.decoded;
   const userId = decoded.userId;
   const path = req.query.path;
-  GetDocumentsWithRoot(path, userId).then((data) => {
-    res.send(data);
+
+  if (!userId) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
+
+  await GetDocumentsWithRoot(path, userId).then((data) => {
+    res.status(200).send(data);
   });
 });
 
 router.get("/get-favourites", authenticateToken, (req, res) => {
   const decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
   const query = { fileOwner: decoded.userId,
     isFavourited: true };
   QueryCollection(query, fileCollection).then((data) => {
-    res.send(data);
+    res.status(200).send(data);
   });
 });
 
 router.get("/get-preferences", authenticateToken, (req, res) => {
   const decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
   GetDocumentById(decoded.userId, "users").then((data) => {
     if (data && data.length > 0 && data[0].userDefaults.preferences) {
       res.send(data[0].userDefaults.preferences); // Send only the userDefaults field
@@ -304,7 +372,7 @@ router.get("/currdir", authenticateToken, (req, res) => {
       }
     });
   } catch (err) {
-    console.log(err);
+    console.log("Error: " + err);
     res.status(500).send({ error: "Error getting current directory" });
   }
 });
@@ -369,11 +437,19 @@ router.post("/download", authenticateToken, (req, res) => {
 });
 
 router.post("/file-rename", authenticateToken, (req, res) => {
+  const decoded = req.decoded;
   const fileId = req.body.fileId;
   const newName = req.body.newName;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
   GetDocumentById(fileId, "files").then((file) => {
     // Rename file here
     RenameFile(file[0], newName).then(() => {
+      GetDocumentById(decoded.userId, "users").then((user) => {
+        UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
+      });
       res.status(200).send(file[0].fileName + file[0].fileExt + " renamed to " + newName);
     });
   });
@@ -381,13 +457,16 @@ router.post("/file-rename", authenticateToken, (req, res) => {
 
 router.post("/file-move", authenticateToken, (req, res) => {
   const decoded = req.decoded;
-  const userId = decoded.userId;
   const fileId = req.body.fileId;
   const newPath = req.body.newPath;
   GetDocumentById(fileId, "files").then((file) => {
     // Move file here
     try {
       MoveFile(file[0], newPath).then(() => {
+        // Update last sync time in user document
+        GetDocumentById(decoded.userId, "users").then((user) => {
+          UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
+        });
         res.status(200).send(file[0].fileName + file[0].fileExt + " moved to " + newPath);
       });
     } catch (err) {
@@ -405,13 +484,23 @@ router.get("/file-info", authenticateToken, (req, res) => {
 });
 
 router.post("/isfavourited", authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
   const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
-    res.send({"isFavourited": file[0].isFavourited});
+    res.status(200).send({"isFavourited": file[0].isFavourited});
   });
 });
 
 router.post("/toggle-favourite", authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
   const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
     // Toggle favourite here
@@ -428,6 +517,11 @@ router.post('/update-preference', authenticateToken, (req, res) => {
   const preference = req.body.prefKey;
   const newValue = req.body.newValue;
 
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
+
   GetDocumentById(decoded.userId, 'users').then((user) => {
     const prefKey = 'userDefaults.preferences.' + preference + '.prefValue';
 
@@ -438,8 +532,14 @@ router.post('/update-preference', authenticateToken, (req, res) => {
 });
 
 
-router.get("/file-delete", authenticateToken, (req, res) => {
-  const fileId = req.query.fileId;
+router.post("/file-delete", authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+
+  if (!decoded) {
+    console.log("User not authenticated!");
+    return res.sendStatus(401);
+  }
+  const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
     // Check if file is a directory
     if (file[0].isDirectory) {
@@ -461,7 +561,11 @@ router.get("/file-delete", authenticateToken, (req, res) => {
       try {
         fs.rmSync(join(file[0].dirPath, file[0].fileName + file[0].fileExt));
         RemoveDocument(file[0], "files");
-        res.send(file[0].fileName + file[0].fileExt + " deleted");
+        // Update last sync time in user document
+        GetDocumentById(decoded.userId, "users").then((user) => {
+          UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
+        });
+        res.status(200).send(file[0].fileName + file[0].fileExt + " deleted");
       } catch (err) {
         // RemoveDocument(file[0], "files");
         res.status(500).send("Error deleting file");
@@ -504,13 +608,25 @@ const saveMetadata = async (filePath, userId) => {
 
 const allNull = (arr) => arr.every(value => value === null);
 
-router.post("/upload", authenticateToken, upload.array("files"), async (req, res) => {
+const uploadMiddleware = upload.array("files");
+
+router.post("/upload", authenticateToken, async (req, res) => {
   try {
+    await new Promise((resolve, reject) => {
+      uploadMiddleware(req, res, (error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+
     const userId = req.decoded.userId;
     const currDir = await GetCurrDir(userId);
     const filePaths = JSON.parse(req.body.filePaths);
     const files = req.files;
-    // let targetPath;
+
     if (allNull(filePaths)) {
       const metadataPromises = files.map(file => saveMetadata(file.path, userId));
       await Promise.all(metadataPromises);
@@ -524,30 +640,35 @@ router.post("/upload", authenticateToken, upload.array("files"), async (req, res
         } else {
           targetPath = join(currDir, file.filename);
         }
-          await createFolderIfNotExists(dirname(targetPath));
-          await moveFile(srcPath, targetPath);
-          await saveMetadata(targetPath, userId);
+        await createFolderIfNotExists(dirname(targetPath));
+        await moveFile(srcPath, targetPath);
+        await saveMetadata(targetPath, userId);
       });
 
       await Promise.all(moveAndSavePromises);
-      await SyncDBWithFilesystem(currDir, userId);
+      await SyncDBWithFilesystem(currDir, userId)
     }
 
-    res.status(201).send("Files uploaded successfully");
+    // Update last sync time in user document
+    GetDocumentById(userId, "users").then((user) => {
+      UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
+    });
+    res.status(201).send({message: "Files uploaded successfully"});
   } catch (error) {
     console.error('Error during file upload:', error);
-    res.status(500).send("An error occurred during file upload. Please try again.");
+    res.status(500).send({message: "An error occurred during file upload. Please try again."});
   }
 });
+
 
 router.get('/last-sync', authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
     console.log("User not authenticated!");
-    res.sendStatus(401);
+    res.status(401).send({error: "User not authenticated!"});
   } else {
     GetDocumentById(decoded.userId, "users").then((user) => {
-      res.status(200).send(user[0].userDefaults.lastSync);
+      res.status(200).send({ lastSync: user[0].userDefaults.lastSync });
     });
   }
 });
@@ -571,6 +692,17 @@ router.get('/sync', authenticateToken, (req, res) => {
   }
 });
 
+router.get('/sys-uptime', authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  if (!decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  } else {
+    const uptime = process.uptime();
+    res.status(200).send({ uptime });
+  }
+});
+
 router.post("/file-search", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   const userId = decoded.userId;
@@ -581,14 +713,21 @@ router.post("/file-search", authenticateToken, (req, res) => {
 
   try {
     const searchTerm = req.body.searchTerm;
-    const searchQuery = new RegExp(searchTerm, "i");
+    const searchByFileExt = searchTerm.startsWith(':');
+    const cleanedSearchTerm = searchByFileExt ? searchTerm.slice(1) : searchTerm;
+    if (cleanedSearchTerm.length < 1) {
+      res.status(200).json(null);
+      return;
+    }
+    const searchQuery = new RegExp(cleanedSearchTerm, "i");
+
     const pipeline = [
       {
         $addFields: {
           searchTermIndex: {
             $regexFind: {
-              input: "$fileName",
-              regex: new RegExp(searchTerm, "i"),
+              input: searchByFileExt ? "$fileExt" : "$fileName",
+              regex: searchQuery,
             },
           },
         },
@@ -596,7 +735,7 @@ router.post("/file-search", authenticateToken, (req, res) => {
       {
         $match: {
           "searchTermIndex.match": { $exists: true },
-          fileName: { $regex: searchQuery },
+          [searchByFileExt ? 'fileExt' : 'fileName']: { $regex: searchQuery },
           fileOwner: userId,
         },
       },
@@ -604,10 +743,8 @@ router.post("/file-search", authenticateToken, (req, res) => {
       { $project: { searchTermIndex: 0 } },
     ];
 
-
-
     QueryCollection(null, "files", pipeline).then((files) => {
-      res.json(files);
+      res.status(200).json(files);
     });
   } catch (err) {
     console.log(err);
@@ -615,11 +752,147 @@ router.post("/file-search", authenticateToken, (req, res) => {
   }
 });
 
+
+// router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
+//   const decoded = req.decoded;
+//   const fileId = req.params.fileId;
+//   if (!decoded) {
+//     console.log("User not authenticated!");
+//     res.sendStatus(401);
+//     return;
+//   }
+
+//   const file = await GetDocumentById(fileId, "files");
+//   const filePath = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
+
+//   try {
+//     const stat = await fs.promises.stat(filePath);
+
+//     if (!stat.isFile()) {
+//       res.status(404).send("File not found");
+//       return;
+//     }
+
+//     UpdateDocument(file[0], { lastViewed: new Date() }, "files");
+
+//     const fileSize = stat.size;
+//     const range = req.headers.range;
+//     let contentType = mime.getType(filePath);
+//     if (!contentType) {
+//       contentType = "text/plain";
+//     }
+//     if (contentType.startsWith("application") && !contentType.startsWith("application/pdf")) {
+//       contentType = "text/plain";
+//     }
+//     // }
+
+//     if (range) {
+//       const parts = range.replace(/bytes=/, "").split("-");
+//       const start = parseInt(parts[0], 10);
+//       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+//       if (start >= fileSize) {
+//         res.status(416).send("Requested range not satisfiable");
+//         return;
+//       }
+
+//       const chunksize = (end - start) + 1;
+//       const readStream = fs.createReadStream(filePath, { start, end });
+
+//       res.status(206).setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+//       res.setHeader("Accept-Ranges", "bytes");
+//       res.setHeader("Content-Length", chunksize);
+//       res.setHeader("Content-Type", contentType);
+//       readStream.pipe(res);
+//     } else {
+//       res.status(200).setHeader("Content-Length", fileSize);
+//       res.setHeader("Content-Type", contentType);
+//       fs.createReadStream(filePath).pipe(res);
+//     }
+
+//   } catch (err) {
+//     console.log(err);
+//     res.status(500).json({ message: err.message });
+//   }
+// });
+router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
+  const decoded = req.decoded;
+  const fileId = req.params.fileId;
+
+  if (!decoded) {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+    return;
+  }
+
+  const file = await GetDocumentById(fileId, "files");
+  const filePath = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
+
+  try {
+    const stat = await fs.promises.stat(filePath);
+
+    if (!stat.isFile()) {
+      res.status(404).send("File not found");
+      return;
+    }
+
+    UpdateDocument(file[0], { lastViewed: new Date() }, "files");
+
+    let contentType = mime.getType(filePath);
+    if (!contentType) {
+      contentType = "text/plain";
+    }
+    if (contentType.startsWith("application") && !contentType.startsWith("application/pdf")) {
+      contentType = "text/plain";
+    }
+
+    const range = req.headers.range;
+    const fileSize = stat.size;
+    const chunkSize = 65536;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (start >= fileSize) {
+        res.status(416).send("Requested range not satisfiable");
+        return;
+      }
+
+      const chunkEnd = Math.min(end, start + chunkSize - 1);
+      const contentLength = chunkEnd - start + 1;
+      const readStream = fs.createReadStream(filePath, { start, end });
+
+      res.status(206)
+        .setHeader("Content-Range", `bytes ${start}-${chunkEnd}/${fileSize}`)
+        .setHeader("Accept-Ranges", "bytes")
+        .setHeader("Content-Length", contentLength)
+        .setHeader("Content-Type", contentType);
+
+      readStream.pipe(res);
+
+    } else {
+      res.status(200)
+        .setHeader("Content-Length", fileSize)
+        .setHeader("Content-Type", contentType);
+
+      const readStream = fs.createReadStream(filePath);
+      readStream.pipe(res);
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
+
+
 // Catch errors and serve the appropriate error page
 router.get((req, res, next) => {
   const status = err.status || 500;
   res.status(status);
-  console.log(status);
   res.sendFile(join(__dirname, "views", `${status}.html`));
 });
 

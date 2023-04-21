@@ -7,16 +7,26 @@
         <link rel="stylesheet" type="text/css" href="/css/main.css">
         <!-- Get the fontawesome icons -->
         <link rel="stylesheet" href="/css/fontawesome/all.min.css">
+        <link href="https://cdn.jsdelivr.net/npm/prismjs@1.27.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+        <link href="https://cdn.jsdelivr.net/npm/prismjs@1.27.0/plugins/line-numbers/prism-line-numbers.css" rel="stylesheet" />
         <script defer src="/js/fontawesome/fontawesome.min.js"></script>
         <!-- Load Script -->
+        <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.5.141/build/pdf.min.js"></script>
+        <!-- Add the PrismJS core script file -->
+        <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.27.0/prism.min.js"></script>
+        <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.27.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+        <!-- Add the PrismJS autoloader script file -->
+        <script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.27.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
         <script defer type="module" src="/js/index.js"></script>
+
         <title>Self Hosted Cloud</title>
     </head>
     <body>
         <!-- Header Bar -->
         <div id="header" class="header-bar">
             <i id="menu-btn" class="menu-btn fas fa-bars fa-2x"></i>
-            <i id="back-btn" class="back-btn fas fa-angle-left fa-2x" aria-hidden="true"></i>
+            <i id="back-btn" class="back-btn hidden fas fa-angle-left fa-2x" aria-hidden="true"></i>
             <div id="directory-wrapper">
                 <h4 id="curr-dir"></h4>
             </div>
@@ -24,14 +34,20 @@
         </div>
 
         <!-- Sidebar -->
-        <div id="sidebar" class="sidebar">
+        <div id="sidebar" class="sidebar unselectable">
             <div id="sidebar-content" class="sidebar-content">
                 <div id="favourites-container" class="sidebar-container">
-                    <h3>Favourites</h3>
+                    <div id="favourites-header" class="sidebar-header inline">
+                        <h3>Favourites</h2>
+                        <!-- <i id="favourites-btn" class="fas fa-star"></i> -->
+                    </div>
                     <ul id="favourites-list" class="sidebar-list"></ul>
                 </div>
                 <div id="system-details-container" class="sidebar-container">
-                    <h3>System Details</h3>
+                    <div id="system-details-header" class="sidebar-header inline">
+                        <h3>System Details</h2>
+                        <!-- <i id="system-details-btn" class="fas fa-chart-simple fa-2x"></i> -->
+                    </div>
                     <ul id="system-details-list" class="sidebar-list">
                         <li id="system-status" class="sidebar-item">Status: Online</li>
                         <li id="system-uptime" class="sidebar-item">Uptime: </li>
@@ -45,29 +61,45 @@
         </div>
 
         <!-- Main static page elements here -->
-        <main>
+        <main id="file-explorer" class="center">
             <div id="search-sort-bar">
                 <input id="search-input" type="text" class="" placeholder="Search Drive...">
                 <i id="sort-btn" class="sort-asc fa-solid fa-arrow-down-wide-short fa-2x"></i>
             </div>
-            <div id="drop-zone">
-                <div id="grid"></div>
+            <div id="drop-zone" class="center">
+                <div id="grid" class="grid-container unselectable"></div>
             </div>
-            <p id="last-updated" class="center">Last Updated:</p>
+            <p id="last-updated" class="center unselectable">Last Updated:</p>
         </main>
+
+        <div id="file-viewer" class="hidden">
+            <div id="file-viewer-header">
+                <!-- Inside your file-viewer or another suitable container -->
+                <div id="page-indicator" class="page-indicator">
+                    Page <span id="current-page">1</span> of <span id="total-pages">1</span>
+                </div>
+                <div id="file-viewer-actions">
+                    <button id="file-viewer-info" class="fas fa-circle-info"></button>
+                    <button id="file-viewer-download-btn" class="btn-blue">Download</button>
+                </div>
+            </div>
+            <div id="file-viewer-content"></div>
+        </div>
 
         <button id="upload-btn" class="upload-btn fas fa-cloud-arrow-up fa-3x"></button>
 
-        <div id="move-file-container" class="popup hidden">
+        <div id="move-file-container" class="popup unselectable hidden">
             <i id="move-back-btn" class="back-btn fas fa-angle-left" aria-hidden="true"></i>
             <ul id="move-list"></ul>
-            <button id="move-cancel-btn" class="btn-default">Cancel</button>
-            <button id="move-btn" class="btn-default">Move</button>
+            <div id="move-file-action-btns">
+                <button id="move-cancel-btn" class="btn-default">Cancel</button>
+                <button id="move-btn" class="btn-blue">Move</button>
+            </div>
         </div>
 
         <!-- (Initially) Hidden Components -->
         <!-- Context menu (hidden on page load) -->
-        <ul id="context-menu" class="hidden">
+        <ul id="context-menu" class="hidden unselectable">
             <li id="file-info" class="context-menu-item first">File info</li>
             <li id="favourite-file" class="context-menu-item">Favourite</li>
             <li id="download-file" class="context-menu-item">Download</li>
@@ -83,6 +115,7 @@
             <li id="file-info-size" class="file-info-item"></li>
             <li id="file-info-type" class="file-info-item"></li>
             <li id="file-info-date" class="file-info-item"></li>
+            <li id="file-info-modified" class="file-info-item"></li>
             <li id="file-info-upload-date" class="file-info-item"></li>
             <li id="file-info-favourited" class="file-info-item"></li>
         </ul>
@@ -90,14 +123,14 @@
         <!-- Rename file input field (hidden on page load) -->
         <input type="text" class="hidden edit-input" id="edit-filename" value="">
 
-        <div id="delete-confirm" class="popup hidden">
+        <div id="delete-confirm" class="popup unselectable hidden">
             <h4>Are you sure you want to delete this file?</h4>
             <p>By pressing "Delete", you will permanently remove this item from your Drive.</p>
             <button id="delete-confirm-btn" class="btn-default btn-delete">Delete</button>
             <button id="delete-cancel-btn" class="btn-default">Cancel</button>
         </div>
 
-        <div id="user-panel" class="popup hidden">
+        <div id="user-panel" class="popup unselectable hidden">
             <div id="user-panel-content">
                 <h3 id="user-panel-username">Account</h3>
                 <div id="user-panel-info">
@@ -112,5 +145,7 @@
                 </div>
             </div>
         </div>
+        <div id="spinner" class="load-spinner hidden"></div>
+        <div id="overlay" class="overlay closed"></div>
     </body>
 </html>

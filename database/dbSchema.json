@@ -2,7 +2,6 @@
     "users": {
         "userName": "string",
         "userPass": "string",
-        "refreshToken": "string",
         "userDefaults": {
             "baseDir": "string",
             "currDir": "string",
@@ -10,6 +9,12 @@
             "totalStorageUsed": 0,
             "totalStorage": 0,
             "preferences": {
+                "useDarkTheme": {
+                    "prefString": "Dark Theme",
+                    "prefType": "toggle",
+                    "prefOptions": [true, false],
+                    "prefValue": false
+                },
                 "showFileExtensions": {
                     "prefString": "Show File Extensions",
                     "prefType": "toggle",

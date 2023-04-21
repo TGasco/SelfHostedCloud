@@ -45,7 +45,6 @@ async function GetUserByCreds(userName) {
 
 async function GetBaseDir(userId) {
   const user = await GetDocumentById(userId, collectionName);
-  console.log(user[0].userDefaults.baseDir);
   return user[0].userDefaults.baseDir;
 }
 

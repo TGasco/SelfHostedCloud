@@ -1,14 +1,11 @@
 // Connect to the MongoDB database
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import archiver from 'archiver';
 import { stat as _stat, access, F_OK, lstatSync } from 'fs';
 import { basename, extname, dirname } from 'path';
 import { InsertDocument, QueryCollection, UpdateDocument, GetDBSchema, getDefaultAttributeValue, RemoveDocument } from './dbops.js';
 // Define the MongoDB connection URI
-const uri = "mongodb://127.0.0.1:27017"
-const dbName = "MyCloudDrive";
 const collectionName = "files";
 
 async function GetDocumentsWithRoot(root, userId, deep=false) {
@@ -16,9 +13,8 @@ async function GetDocumentsWithRoot(root, userId, deep=false) {
     var query = new RegExp("^" + root + "(\\/.*)*$");
     return QueryCollection({ "dirPath" : { $regex: query } }, collectionName);
   } else {
-    var query = { "fileOwner": userId, "dirPath": root };
+    return QueryCollection({ "fileOwner": userId, "dirPath": root }, collectionName);
   }
-  return QueryCollection(query, collectionName);
 }
 
 async function GetAllUserFiles(userId) {
@@ -184,7 +180,6 @@ async function MoveFile(file, newPath, userId) {
   try {
     // Updates any descendants of the old path to the new path
     await GetDocumentsWithRoot(oldPath, userId, true).then(documents => {
-      console.log(documents);
       if (documents.length > 0) {
         for (let i = 0; i < documents.length; i++) {
           const oldfPath = path.join(documents[i].dirPath);

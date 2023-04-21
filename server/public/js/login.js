@@ -21,6 +21,9 @@ function submitForm(event) {
   .then(res => {
     if (res.status === 200) {
       window.location.href = "/";
+    } else {
+      errorMessage.innerText = "Incorrect username or password";
+      errorMessage.classList.add('show');
     }
   });
 }

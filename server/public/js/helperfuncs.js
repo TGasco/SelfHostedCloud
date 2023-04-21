@@ -27,6 +27,25 @@ export function ConvertDate(date) {
   }
 }
 
+export function ConvertTime(timeSecs) {
+  // Converts a time in seconds to a human readable form
+  let hours = Math.floor(timeSecs / 3600);
+  let minutes = Math.floor((timeSecs - (hours * 3600)) / 60);
+  let seconds = Math.floor(timeSecs - (hours * 3600) - (minutes * 60));
+
+  if (hours < 10) {
+    hours = "0" + hours;
+  }
+  if (minutes < 10) {
+    minutes = "0" + minutes;
+  }
+  if (seconds < 10) {
+    seconds = "0" + seconds;
+  }
+
+  return `${hours}:${minutes}:${seconds}`;
+}
+
 
 export function BytesToSize(bytes) {
   let sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
@@ -85,19 +104,62 @@ export async function fetchWithAuth(url, options = {}) {
       credentials: 'include', // Send cookies with the request
     });
     if (refreshResponse.ok) {
-      const { accessToken } = await refreshResponse.json();
-
       // Update the accessToken cookie manually if necessary
       // e.g., if your client is on a different domain than your server
 
-
       // Retry the original request with the new accessToken
-      return fetch(url, options);
+      const retryResponse = await fetch(url, options);
+      if (retryResponse.ok) {
+        const data = await retryResponse.json();
+        return { success: true, data, status: retryResponse.status };
+      } else {
+        const errorText = await retryResponse.text();
+        return { success: false, error: errorText, status: retryResponse.status };
+      }
     } else {
       // Redirect to login or handle refresh token error
       throw new Error('Refresh token failed');
     }
   }
 
-  return response;
+  if (response.ok) {
+    // const data = await response.json();
+    return response;
+  } else {
+    const errorText = await response.text();
+    return { success: false, error: errorText, status: response.status };
+  }
+}
+
+export async function fetchStreamedFile(fileId) {
+  const response = await fetchWithAuth(`/user-files/${fileId}`, {
+    method: 'GET',
+    headers: {
+      // Range: 'bytes=0-', // Request the entire file in a single range
+    },
+  });
+
+  if (!response.ok && response.status !== 206) {
+    throw new Error('Failed to fetch file');
+  }
+
+  const contentType = response.headers.get('Content-Type');
+  const stream = response.body;
+  const reader = stream.getReader();
+  const chunks = [];
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+
+  const blob = new Blob(chunks, { type: contentType });
+  const url = URL.createObjectURL(blob);
+
+  const releaseURL = () => {
+    URL.revokeObjectURL(url);
+  };
+
+  return { url, contentType, releaseURL };
 }

@@ -34,6 +34,25 @@ def run_command(command: List[str]) -> None:
     if stderr:
         print(stderr.decode("utf-8").strip())
 
+def install_source_from_github(repository: str = "MrDouglasMcreedy", branch: str = "SelfHostedCloud") -> None:
+    """
+    Install a source code from a GitHub repository.
+
+    Args:
+        repository (str): The name of the GitHub repository.
+        branch (str): The name of the GitHub branch.
+
+    Returns:
+        None
+    """
+    try:
+        run_command(["git", "clone", f"https://github.com/{repository}/{branch}.git"])
+    # run_command(["git", "checkout", branch])
+    # run_command(["git", "submodule", "update", "--init", "--recursive"])
+    # run_command(["git", "submodule", "update", "--recursive"])
+    except subprocess.CalledProcessError as e:
+        print(e.output.decode("utf-8").strip())
+
 def install_pip() -> None:
     """
     Install pip if it's not already installed.
@@ -257,6 +276,8 @@ def main() -> None:
 
     if sys.platform == "darwin" and hasUsedBrew:
         brew_cleanup()
+
+    install_source_from_github()
 
     print("Environment setup complete.")
 

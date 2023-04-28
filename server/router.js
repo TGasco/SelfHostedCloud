@@ -15,6 +15,7 @@ import { comparePasswords, isValidInput } from "../database/crypt.js";
 
 const router = express.Router();
 
+// Multer configuration: middleware handles file uploads
 const storage = multer.diskStorage({
   preservePath: true,
   destination: async (req, file, callback) => {
@@ -31,13 +32,15 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const fileCollection = "files";
 const userCollection = "users";
 
+// Authentication middleware: checks if user is authenticated by verifying the access token to retrieve decoded userID
+// Applied to all protected routes
 function authenticateToken(req, res, next) {
   const token = req.cookies.accessToken;
 
@@ -60,13 +63,10 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// POST request - Refreshes an expired access token using a valid refresh token
 router.post('/token', async (req, res) => {
   const refreshToken = req.cookies.refreshToken;
   if (!refreshToken) return res.sendStatus(401);
-
-  // const user = await QueryCollection({ refreshToken }, userCollection);
-
-  // if (!user) return res.sendStatus(403);
 
   jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
@@ -81,54 +81,54 @@ router.post('/token', async (req, res) => {
   });
 });
 
+// GET request - refreshes (a non-expired) access token
 router.get("/token-refresh", authenticateToken, async (req, res) => {
   // Check auth status
-  if (!req.decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
+  if (req.decoded) {
     const accessToken = await generateAccessToken(req.decoded.userId, process.env.ACCESS_TOKEN_SECRET);
     res.cookie('accessToken', accessToken, { httpOnly: true,
       secure: true,
       sameSite: 'strict',
       expires: new Date(Date.now() + 15 * 60 * 1000) }); // 15 minutes
     res.sendStatus(200).json({ accessToken });
+    return;
   }
+  console.log("User not authenticated!");
+  res.sendStatus(401);
 });
 
+// GET Request - returns the username for the current user
 router.get("/username", authenticateToken, async function (req, res) {
   // Check auth status
-  if (!req.decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
+  if (req.decoded) {
     const user = await GetDocumentById(req.decoded.userId, userCollection);
     res.setHeader("Content-type", "application/json");
     res.setHeader("status", "200");
     res.send(JSON.stringify(user[0].userName));
+    return;
   }
+  console.log("User not authenticated!");
+  res.sendStatus(401);
 })
 
+// GET Request - serves the user's home page
 router.get("/", authenticateToken, function (req, res) {
   console.log("GET main page");
   // Check auth status
-  if (!req.decoded) {
-    console.log("User not authenticated!");
-    res.redirect("/login");
-  } else {
+  if (req.decoded) {
     console.log("User authenticated! Serving index.html...");
 
     res.setHeader("Content-Type", "text/html");
     res.setHeader("status", "200");
     res.sendFile(join(__dirname, "views", "index.html"));
+    return;
   }
+  console.log("User not authenticated!");
+  res.redirect("/login");
 });
 
 
-// This code sets up a new route for a GET request to the '/login' path,
-// and defines a callback function to handle the request.
-// The callback function sets the 'Content-type' header of the response to 'text/html',
-// and sends back the contents of a file named 'login.html' located in a 'public' folder.
+// GET Request - serves the login page
 router.get("/login", function (req, res) {
   res.setHeader("Content-type", "text/html");
   res.sendFile(join(__dirname, "views", "login.html"));
@@ -149,65 +149,13 @@ router.get("/logout", function (req, res) {
   res.redirect("/login");
 });
 
+// GET Request - serves the signup page
 router.get("/signup", function (req, res) {
   res.setHeader("Content-type", "text/html");
   res.sendFile(join(__dirname, "views", "signup.html"));
 });
 
-// This code sets up a new route for a POST request to the '/login' path,
-// and defines a callback function to handle the request.
-// The callback function sends a response with the message 'Login successful'.
-// router.post("/login", async (req, res) => {
-//   try {
-//     const username = req.body.username;
-//     const password = req.body.password;
-
-//     // Sanitize and validate user inputs
-//     if (!isValidInput(username, password)) {
-//       console.log("Invalid input");
-//       return res.status(400).json({ message: 'Invalid input' });
-//     }
-
-//     const user = await GetUserByCreds(username);
-//     // If user not found, return error
-//     if (!user[0]) {
-//       console.log("User not found");
-//       return res.status(401).json({ message: 'Invalid credentials' });
-//     }
-//     console.log("User found, compare passwords");
-//     // Compare password hashes
-//     const passMatch = await comparePasswords(password, user[0].userPass);
-
-//     if (!passMatch) {
-//       return res.status(401).json({ message: 'Invalid credentials' });
-//     }
-//     console.log("Passwords match, authenticate user");
-
-//     // Generate JWT token
-//     const refreshToken = await generateRefreshToken(user[0]._id, process.env.REFRESH_TOKEN_SECRET)
-//     res.cookie('refreshToken', refreshToken, { httpOnly: true,
-//       secure: true,
-//       sameSite: 'strict',
-//       expires: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) }); // 14 days
-
-//     const accessToken = await generateAccessToken(user[0]._id, process.env.ACCESS_TOKEN_SECRET)
-//     console.log("Access token generated");
-//     // Store access and refresh tokens in httpOnly cookies
-//     res.cookie('accessToken', accessToken, { httpOnly: true,
-//       secure: true,
-//       sameSite: 'strict',
-//       expires: new Date(Date.now() + 15 * 60 * 1000) });
-//     console.log("User authenticated, redirect to main page");
-//     res.redirect("/");
-
-
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// });
-
-
+// POST Request - handles user authentication on the login page
 router.post("/login", async (req, res) => {
   try {
     const username = req.body.username;
@@ -259,7 +207,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-
+// POST request - handles user signup on the signup page
 router.post("/signup", async (req, res) => {
   try {
     const username = req.body.username;
@@ -283,13 +231,13 @@ router.post("/signup", async (req, res) => {
 
     // Create new user
     const result = await NewUser(username, password, basedir);
-    if (!result) {
-      console.log("Error creating user");
-      return res.status(500).json({ message: 'Error creating User' });
-    } else {
+    if (result) {
       // Create the user's base directory
       await CreateDirectoryIfNotExists(basedir);
       return res.status(201).json({ message: 'User created' });
+    } else {
+      console.log("Error creating user");
+      return res.status(500).json({ message: 'Error creating User' });
     }
 
   } catch (err) {
@@ -298,7 +246,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// GET Requests
+// GET Request - Returns a list of documents at a given path
 router.get("/metadata", authenticateToken, async (req, res) => {
   const decoded = req.decoded;
   const userId = decoded.userId;
@@ -314,6 +262,7 @@ router.get("/metadata", authenticateToken, async (req, res) => {
   });
 });
 
+// GET Request - Returns a list of favourites for a given user
 router.get("/get-favourites", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -327,6 +276,7 @@ router.get("/get-favourites", authenticateToken, (req, res) => {
   });
 });
 
+// GET Request - Returns the list of preferences for a given user
 router.get("/get-preferences", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -342,19 +292,20 @@ router.get("/get-preferences", authenticateToken, (req, res) => {
   });
 });
 
-
+// GET Request - Returns the base directory for a given user
 router.get("/basedir", authenticateToken, (req, res) => {
   const decoded = req.decoded;
-  if (!decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
+  if (decoded) {
     GetBaseDir(decoded.userId).then((data) => {
       res.send({baseDir: data});
     });
+  } else {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
   }
 });
 
+// GET Request - Returns the current directory for a given user
 router.get("/currdir", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -372,11 +323,12 @@ router.get("/currdir", authenticateToken, (req, res) => {
       }
     });
   } catch (err) {
-    console.log("Error: " + err);
+    console.log(`Error: ${err}`);
     res.status(500).send({ error: "Error getting current directory" });
   }
 });
 
+// POST Request - Updates the current directory for a given user
 router.post("/currdir", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -394,7 +346,7 @@ router.post("/currdir", authenticateToken, (req, res) => {
         console.log("User not found");
       }
     });
-    res.status(200).send({ message: "Current directory updated to " + currDir });
+    res.status(200).send({ message: `Current directory updated to ${currDir}` });
   } catch (err) {
     console.log(err);
     console.log("Error updating current directory");
@@ -402,6 +354,8 @@ router.post("/currdir", authenticateToken, (req, res) => {
   }
 });
 
+
+// POST request - Handles a file download request for a given file ID
 router.post("/download", authenticateToken, (req, res) => {
   const fileId = req.body.fileId;
   GetDocumentById(fileId, "files").then((file) => {
@@ -412,12 +366,12 @@ router.post("/download", authenticateToken, (req, res) => {
         if (err) {
           res.status(500).send("Error zipping directory");
         } else {
-          res.download(path + ".zip", (err) => {
+          res.download(`${path}.zip`, (err) => {
             if (err) {
               res.status(500).send("Error sending files to client");
             } else {
               // Delete zip file and extracted contents
-              fs.unlink(path + ".zip", (err) => {
+              fs.unlink(`${path}.zip`, (err) => {
                 if (err) {
                   console.log("Error deleting zip file");
                 }
@@ -436,6 +390,7 @@ router.post("/download", authenticateToken, (req, res) => {
   });
 });
 
+// POST request - Handles file renaming
 router.post("/file-rename", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   const fileId = req.body.fileId;
@@ -450,11 +405,12 @@ router.post("/file-rename", authenticateToken, (req, res) => {
       GetDocumentById(decoded.userId, "users").then((user) => {
         UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
       });
-      res.status(200).send(file[0].fileName + file[0].fileExt + " renamed to " + newName);
+      res.status(200).send(`${file[0].fileName + file[0].fileExt} renamed to ${newName}`);
     });
   });
 });
 
+// POST request - Handles file movement
 router.post("/file-move", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   const fileId = req.body.fileId;
@@ -467,7 +423,7 @@ router.post("/file-move", authenticateToken, (req, res) => {
         GetDocumentById(decoded.userId, "users").then((user) => {
           UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
         });
-        res.status(200).send(file[0].fileName + file[0].fileExt + " moved to " + newPath);
+        res.status(200).send(`${file[0].fileName + file[0].fileExt} moved to ${newPath}`);
       });
     } catch (err) {
       console.log(err);
@@ -476,6 +432,7 @@ router.post("/file-move", authenticateToken, (req, res) => {
   });
 })
 
+// GET request - Returns file info for a given file ID
 router.get("/file-info", authenticateToken, (req, res) => {
   const fileId = req.query.fileId;
   GetDocumentById(fileId, "files").then((file) => {
@@ -483,6 +440,8 @@ router.get("/file-info", authenticateToken, (req, res) => {
   });
 });
 
+
+// POST request - Returns whether a given file is favourited or not
 router.post("/isfavourited", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -495,6 +454,7 @@ router.post("/isfavourited", authenticateToken, (req, res) => {
   });
 });
 
+// POST request - Toggles isFavourited attribute for a file, given the file ID
 router.post("/toggle-favourite", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -512,6 +472,7 @@ router.post("/toggle-favourite", authenticateToken, (req, res) => {
   });
 });
 
+// POST request - Updates a given preference for the given user
 router.post('/update-preference', authenticateToken, (req, res) => {
   const decoded = req.decoded;
   const preference = req.body.prefKey;
@@ -523,7 +484,7 @@ router.post('/update-preference', authenticateToken, (req, res) => {
   }
 
   GetDocumentById(decoded.userId, 'users').then((user) => {
-    const prefKey = 'userDefaults.preferences.' + preference + '.prefValue';
+    const prefKey = `userDefaults.preferences.${preference}.prefValue`;
 
     UpdateDocument(user[0], { [prefKey]: newValue }, 'users').then(() => {
       res.send({ [preference]: newValue });
@@ -531,7 +492,7 @@ router.post('/update-preference', authenticateToken, (req, res) => {
   });
 });
 
-
+// POST request - Deletes a given file, given the file ID
 router.post("/file-delete", authenticateToken, (req, res) => {
   const decoded = req.decoded;
 
@@ -552,7 +513,7 @@ router.post("/file-delete", authenticateToken, (req, res) => {
           });
         });
         RemoveDocument(file[0], "files");
-        res.send(file[0].fileName + file[0].fileExt + " deleted");
+        res.send(`${file[0].fileName + file[0].fileExt} deleted`);
       } catch (err) {
         res.status(500).send("Error deleting directory");
       }
@@ -565,24 +526,24 @@ router.post("/file-delete", authenticateToken, (req, res) => {
         GetDocumentById(decoded.userId, "users").then((user) => {
           UpdateDocument(user[0], { ["userDefaults.lastSync"]: new Date() }, "users");
         });
-        res.status(200).send(file[0].fileName + file[0].fileExt + " deleted");
+        res.status(200).send(`${file[0].fileName + file[0].fileExt} deleted`);
       } catch (err) {
-        // RemoveDocument(file[0], "files");
         res.status(500).send("Error deleting file");
       }
     }
   });
 });
 
+// GET request - Returns server storage info i.e. total storage, used storage, available storage
 router.get("/storage-info", authenticateToken, (req, res) => {
-  var decoded = req.decoded;
-  if (!decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
+  const decoded = req.decoded;
+  if (decoded) {
     getStorageInfo().then((data) => {
       res.send(JSON.stringify(data));
     });
+  } else {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
   }
 });
 
@@ -591,7 +552,7 @@ const createFolderIfNotExists = async (folderPath) => {
     await fs.promises.access(folderPath);
     return null;
   } catch {
-    console.log("Creating folder: " + folderPath);
+    console.log(`Creating folder: ${folderPath}`);
     return await fs.promises.mkdir(folderPath, { recursive: true });
   }
 };
@@ -610,6 +571,7 @@ const allNull = (arr) => arr.every(value => value === null);
 
 const uploadMiddleware = upload.array("files");
 
+// POST request - Implements multer middlewar and fandles file uploads to the server
 router.post("/upload", authenticateToken, async (req, res) => {
   try {
     await new Promise((resolve, reject) => {
@@ -633,13 +595,8 @@ router.post("/upload", authenticateToken, async (req, res) => {
     } else {
       const moveAndSavePromises = files.map(async (file, index) => {
         const srcPath = join(file.destination, file.filename);
-        let targetPath;
+        const targetPath = filePaths[index] !== null ? join(currDir, filePaths[index]) : join(currDir, file.filename);
 
-        if (filePaths[index] !== null) {
-          targetPath = join(currDir, filePaths[index]);
-        } else {
-          targetPath = join(currDir, file.filename);
-        }
         await createFolderIfNotExists(dirname(targetPath));
         await moveFile(srcPath, targetPath);
         await saveMetadata(targetPath, userId);
@@ -660,26 +617,24 @@ router.post("/upload", authenticateToken, async (req, res) => {
   }
 });
 
-
+// GET request - Returns the last sync time for the user
 router.get('/last-sync', authenticateToken, (req, res) => {
   const decoded = req.decoded;
-  if (!decoded) {
-    console.log("User not authenticated!");
-    res.status(401).send({error: "User not authenticated!"});
-  } else {
+  if (decoded) {
     GetDocumentById(decoded.userId, "users").then((user) => {
       res.status(200).send({ lastSync: user[0].userDefaults.lastSync });
     });
+  } else {
+    console.log("User not authenticated!");
+    res.status(401).send({error: "User not authenticated!"});
   }
 });
 
+// GET request - Syncs the filesystem with the database & vice versa
 router.get('/sync', authenticateToken, (req, res) => {
   // Sync filesystem with database
-  var decoded = req.decoded;
-  if (!decoded) {
-    console.log("User not authenticated!");
-    res.sendStatus(401);
-  } else {
+  const decoded = req.decoded;
+  if (decoded) {
     GetBaseDir(decoded.userId).then((baseDir) => {
       SyncDBWithFilesystem(baseDir, decoded.userId).then(() => {
         // Update last sync time in user document
@@ -689,20 +644,25 @@ router.get('/sync', authenticateToken, (req, res) => {
         });
       });
     });
-  }
-});
-
-router.get('/sys-uptime', authenticateToken, (req, res) => {
-  const decoded = req.decoded;
-  if (!decoded) {
+  } else {
     console.log("User not authenticated!");
     res.sendStatus(401);
-  } else {
-    const uptime = process.uptime();
-    res.status(200).send({ uptime });
   }
 });
 
+// GET request - Returns the system process uptime
+router.get('/sys-uptime', authenticateToken, (req, res) => {
+  const decoded = req.decoded;
+  if (decoded) {
+    const uptime = process.uptime();
+    res.status(200).send({ uptime });
+  } else {
+    console.log("User not authenticated!");
+    res.sendStatus(401);
+  }
+});
+
+// GET request - Queries 'files' collection to find files that match a given search term
 router.post("/file-search", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   const userId = decoded.userId;
@@ -752,69 +712,7 @@ router.post("/file-search", authenticateToken, (req, res) => {
   }
 });
 
-
-// router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
-//   const decoded = req.decoded;
-//   const fileId = req.params.fileId;
-//   if (!decoded) {
-//     console.log("User not authenticated!");
-//     res.sendStatus(401);
-//     return;
-//   }
-
-//   const file = await GetDocumentById(fileId, "files");
-//   const filePath = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
-
-//   try {
-//     const stat = await fs.promises.stat(filePath);
-
-//     if (!stat.isFile()) {
-//       res.status(404).send("File not found");
-//       return;
-//     }
-
-//     UpdateDocument(file[0], { lastViewed: new Date() }, "files");
-
-//     const fileSize = stat.size;
-//     const range = req.headers.range;
-//     let contentType = mime.getType(filePath);
-//     if (!contentType) {
-//       contentType = "text/plain";
-//     }
-//     if (contentType.startsWith("application") && !contentType.startsWith("application/pdf")) {
-//       contentType = "text/plain";
-//     }
-//     // }
-
-//     if (range) {
-//       const parts = range.replace(/bytes=/, "").split("-");
-//       const start = parseInt(parts[0], 10);
-//       const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-
-//       if (start >= fileSize) {
-//         res.status(416).send("Requested range not satisfiable");
-//         return;
-//       }
-
-//       const chunksize = (end - start) + 1;
-//       const readStream = fs.createReadStream(filePath, { start, end });
-
-//       res.status(206).setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
-//       res.setHeader("Accept-Ranges", "bytes");
-//       res.setHeader("Content-Length", chunksize);
-//       res.setHeader("Content-Type", contentType);
-//       readStream.pipe(res);
-//     } else {
-//       res.status(200).setHeader("Content-Length", fileSize);
-//       res.setHeader("Content-Type", contentType);
-//       fs.createReadStream(filePath).pipe(res);
-//     }
-
-//   } catch (err) {
-//     console.log(err);
-//     res.status(500).json({ message: err.message });
-//   }
-// });
+// GET request - Streams a given file to the client
 router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
   const decoded = req.decoded;
   const fileId = req.params.fileId;
@@ -848,7 +746,7 @@ router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
 
     const range = req.headers.range;
     const fileSize = stat.size;
-    const chunkSize = 65536;
+    const chunkSize = 65_536;
 
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");

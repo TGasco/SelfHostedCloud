@@ -1,5 +1,5 @@
 function regexMatch(pattern, str) {
-  let regex = new RegExp(pattern);
+  const regex = new RegExp(pattern);
   return regex.test(str);
 }
 
@@ -9,19 +9,19 @@ export function ConvertDate(date) {
   // Check time elapsed since the date
   const timeElapsed = Date.now() - date.getTime();
 
-  if (timeElapsed < 60000) {
+  if (timeElapsed < 60_000) {
     return "Just now";
-  } else if (timeElapsed < 3600000) {
-    const minutes = Math.floor(timeElapsed / 60000);
-    return minutes === 1 ? "1 minute ago" : minutes + " minutes ago";
-  } else if (timeElapsed < 86400000) {
-    const hours = Math.floor(timeElapsed / 3600000);
-    return (hours === 1 ? "1 hour ago" : hours + " hours ago") + " (" + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) + ")";
-  } else if (timeElapsed > 86400000 && timeElapsed < 172800000) {
-    return "Yesterday at " + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  } else if (timeElapsed < 604800000 && timeElapsed > 2419200000) {
-    const days = Math.floor(timeElapsed / 86400000);
-    return (days === 1 ? "1 day ago" : days + " days ago") + " at " + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  } else if (timeElapsed < 3_600_000) {
+    const minutes = Math.floor(timeElapsed / 60_000);
+    return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+  } else if (timeElapsed < 86_400_000) {
+    const hours = Math.floor(timeElapsed / 3_600_000);
+    return `${hours === 1 ? "1 hour ago" : `${hours} hours ago`} (${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })})`;
+  } else if (timeElapsed > 86_400_000 && timeElapsed < 172_800_000) {
+    return `Yesterday at ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (timeElapsed < 604_800_000 && timeElapsed > 2_419_200_000) {
+    const days = Math.floor(timeElapsed / 86_400_000);
+    return `${days === 1 ? "1 day ago" : `${days} days ago`} at ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
   } else {
     return `${date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })} at ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
   }
@@ -34,13 +34,13 @@ export function ConvertTime(timeSecs) {
   let seconds = Math.floor(timeSecs - (hours * 3600) - (minutes * 60));
 
   if (hours < 10) {
-    hours = "0" + hours;
+    hours = `0${hours}`;
   }
   if (minutes < 10) {
-    minutes = "0" + minutes;
+    minutes = `0${minutes}`;
   }
   if (seconds < 10) {
-    seconds = "0" + seconds;
+    seconds = `0${seconds}`;
   }
 
   return `${hours}:${minutes}:${seconds}`;
@@ -48,10 +48,10 @@ export function ConvertTime(timeSecs) {
 
 
 export function BytesToSize(bytes) {
-  let sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
   if (bytes == 0) return '0 Byte';
-  let i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-  return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
+  const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${Math.round(bytes / 1024 ** i, 2)} ${sizes[i]}`;
 }
 
 export function truncatePath(filePath, element) {
@@ -67,7 +67,7 @@ export function truncatePath(filePath, element) {
     return filePath;
   }
 
-  let pathSegments = filePath.split("/");
+  const pathSegments = filePath.split("/");
   let truncatedPath = `/${pathSegments.pop()}`;
 
   while (pathSegments.length > 0) {

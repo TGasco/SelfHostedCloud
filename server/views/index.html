@@ -61,6 +61,7 @@
         </div>
 
         <!-- Main static page elements here -->
+        <!-- File Explorer: Displays the files grid/list -->
         <main id="file-explorer" class="center">
             <div id="search-sort-bar">
                 <input id="search-input" type="text" class="" placeholder="Search Drive...">
@@ -72,6 +73,7 @@
             <p id="last-updated" class="center unselectable">Last Updated:</p>
         </main>
 
+        <!-- Fiole Viewer: Displays contents of a given file on page -->
         <div id="file-viewer" class="hidden">
             <div id="file-viewer-header">
                 <!-- Inside your file-viewer or another suitable container -->
@@ -88,6 +90,7 @@
 
         <button id="upload-btn" class="upload-btn fas fa-cloud-arrow-up fa-3x"></button>
 
+        <!-- Move file container: Displays filesystem in popup as list -->
         <div id="move-file-container" class="popup unselectable hidden">
             <i id="move-back-btn" class="back-btn fas fa-angle-left" aria-hidden="true"></i>
             <ul id="move-list"></ul>
@@ -130,6 +133,7 @@
             <button id="delete-cancel-btn" class="btn-default">Cancel</button>
         </div>
 
+        <!-- User panel: Displays User acccount information and preferences -->
         <div id="user-panel" class="popup unselectable hidden">
             <div id="user-panel-content">
                 <h3 id="user-panel-username">Account</h3>
@@ -145,6 +149,7 @@
                 </div>
             </div>
         </div>
+        <!-- Loading spinner -->
         <div id="spinner" class="load-spinner hidden"></div>
         <div id="overlay" class="overlay closed"></div>
     </body>

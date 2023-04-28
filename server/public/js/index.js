@@ -9,14 +9,20 @@ let fileView = false;
 let baseDir;
 let touchTimeout;
 let longPress;
-let renderedPages = new Map();
-let renderingPages = new Set();
+const renderedPages = new Map();
+const renderingPages = new Set();
 let pdf = null;
 
 // Define the worker script for pdf.js
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.5.141/build/pdf.worker.min.js';
 
-
+/**
+ * Initialises the file explorer view, displaying file contents for a given
+ * path. generates as a Grid/List depending on user preference.
+ * @param {string} path
+ * @param {*} documents
+ * @returns {Promise<void>}
+ */
 async function init_files(path, documents = null) {
   if (fileView) return;
   let files;
@@ -26,11 +32,11 @@ async function init_files(path, documents = null) {
   if (documents) {
     files = documents;
   } else {
-    if (!path) {
-      path = currDir;
-    } else {
+    if (path) {
       currDir = path;
     // Update the current directory on the server
+    } else {
+      path = currDir;
     }
     // Get and display the relative path
     const relativePath = await GetRelativePath(path);
@@ -51,11 +57,7 @@ async function init_files(path, documents = null) {
 
   if (files.length === 0) {
     const emptyMessage = document.createElement("div");
-    if (path === baseDir) {
-      emptyMessage.textContent = "Your Drive is empty! Upload some files to get started.";
-    } else {
-      emptyMessage.textContent = "This folder is empty.";
-    }
+    emptyMessage.textContent = path === baseDir ? "Your Drive is empty! Upload some files to get started." : "This folder is empty.";
     emptyMessage.id = "empty-drive-message";
     emptyMessage.className = "empty-drive-message center";
     oldGrid.replaceWith(emptyMessage);
@@ -64,15 +66,9 @@ async function init_files(path, documents = null) {
 
   // Sort the files
   const sortBtn = document.getElementById("sort-btn");
-  if (sortBtn.classList.contains("sort-asc")) files = SortFiles(files, "fileName", true);
-  else files = SortFiles(files, "fileName", false);
+  files = sortBtn.classList.contains("sort-asc") ? SortFiles(files, "fileName", true) : SortFiles(files, "fileName", false);
   // use init_grid if User list view preference is set to grid
-  if (userPreferences.useListView.prefValue == false) {
-    success = init_grid(files);
-    // return;
-  } else {
-    success = init_list(files);
-  }
+  success = userPreferences.useListView.prefValue == false ? init_grid(files) : init_list(files);
 
   if (!documents) {
     currDir = path;
@@ -190,6 +186,12 @@ async function init_favourite_list() {
   }
 }
 
+
+/**
+ * Initialize the move list view as a popup list at a given path.
+ * @param {string} path - The initial path to display in the move list view.
+ * @returns {Promise<void>}
+ */
 async function init_move_list(path) {
   // Get the documents in the current directory
   const moveBackBtn = document.getElementById("move-back-btn");
@@ -203,7 +205,7 @@ async function init_move_list(path) {
 
 
   const onClickListener = async (file) => {
-    const filePath = file.isDirectory ? file.dirPath + "/" + file.fileName : file.dirPath;
+    const filePath = file.isDirectory ? `${file.dirPath}/${file.fileName}` : file.dirPath;
     if (filePath !== moveCurrDir) {
       init_move_list(filePath);
     }
@@ -215,9 +217,15 @@ async function init_move_list(path) {
   // Update the current directory
 }
 
+
+/**
+ * Initialize file list view as a list for a given path.
+ * @param {string} path - The initial path to display in the files list view.
+ * @returns {Promise<void>}
+ */
 async function init_list(files) {
   const onClickListener = async (file) => {
-    const filePath = file.isDirectory ? file.dirPath + "/" + file.fileName : file.dirPath;
+    const filePath = file.isDirectory ? `${file.dirPath}/${file.fileName}` : file.dirPath;
     if (filePath !== currDir) {
       init_files(filePath);
     }
@@ -226,6 +234,13 @@ async function init_list(files) {
   init_list_view(files, "grid", onClickListener, true);
 }
 
+/**
+ * Initialises file list view with the user's files and folders.
+ * @param {List<Object>} documents
+ * @param {string} elementId
+ * @param {*} onClickListener
+ * @param {bool} allowFileView
+ */
 async function init_list_view(documents, elementId, onClickListener, allowFileView = false) {
   let oldList = document.getElementById(elementId);
   if (oldList === null) {
@@ -246,7 +261,6 @@ async function init_list_view(documents, elementId, onClickListener, allowFileVi
 
     // Wait for all the promises to resolve
     await Promise.all(docPromises);
-    // }
 
     // Append the document fragment to the new list
     newList.appendChild(documentFragment);
@@ -258,6 +272,15 @@ async function init_list_view(documents, elementId, onClickListener, allowFileVi
   }
 }
 
+/**
+ * Initialises a single list item corresponding to a given file, at the given index.
+ * @param {Object} file - The file to create a list item for.
+ * @param {int} i - The index of the file in the list.
+ * @param {*} documentFragment - The document fragment to append the list item to.
+ * @param {bool} allowFileView - Whether or not to allow the file to be opened.
+ * @param {*} onClickListener - The function to call when the list item is clicked.
+ * @returns
+ */
 async function createItem(file, i, documentFragment, allowFileView = false, onClickListener = null) {
   return new Promise(async (resolve) => {
     const doc = document.createElement("li");
@@ -293,6 +316,12 @@ async function createItem(file, i, documentFragment, allowFileView = false, onCl
   });
 }
 
+
+/**
+ * Initialises the preferences list view with the user's preferences.
+ * @param {List<Object>} preferences - A list of the user's preferences.
+ * @returns {Promise<void>}
+ */
 async function init_preferences(preferences) {
   const preferencesList = document.getElementById("preferences-list");
   const newPreferences = document.createElement("ul");
@@ -323,6 +352,13 @@ async function init_preferences(preferences) {
   }
 }
 
+/**
+ * Initialises a single list item corresponding to a given preference.
+ * @param {*} pref - The preference to create a list item for.
+ * @param {*} i - The index of the preference in the list.
+ * @param {*} prefFragment - The document fragment to append the list item to.
+ * @returns
+ */
 function createPrefItem(pref, i, prefFragment) {
   return new Promise(async (resolve) => {
     const [key, value] = pref;
@@ -330,7 +366,7 @@ function createPrefItem(pref, i, prefFragment) {
     const prefType = value.prefType;
     const prefItem = document.createElement("li");
     let prefInput;
-    prefItem.className = "sidebar-item pref-item prefType-" + prefType;
+    prefItem.className = `sidebar-item pref-item prefType-${prefType}`;
 
     const prefName = document.createElement("p");
     prefName.textContent = value.prefString;
@@ -358,6 +394,12 @@ function createPrefItem(pref, i, prefFragment) {
   });
 }
 
+/**
+ * Initialises a toggle switch associated with a given preference.
+ * @param {*} key - The key of the preference.
+ * @param {*} prefValue - The value of the preference.
+ * @returns
+ */
 const createSwitch = (key, prefValue) => {
     // Create label element for the switch
     const switchLabel = document.createElement("label");
@@ -367,11 +409,7 @@ const createSwitch = (key, prefValue) => {
     prefToggle.type = "checkbox";
     prefToggle.id = key;
     prefToggle.className = "prefType-toggle";
-    if (prefValue) {
-      prefToggle.checked = true;
-    } else {
-      prefToggle.checked = false;
-    }
+    prefToggle.checked = prefValue ? true : false;
     prefToggle.addEventListener("click", (e) => {
       updatePreference(e);
     });
@@ -387,6 +425,13 @@ const createSwitch = (key, prefValue) => {
     return switchLabel;
 }
 
+
+/**
+ * Initialises a slider associated with a given preference.
+ * @param {*} key - The key of the preference.
+ * @param {*} prefValue - The value of the preference.
+ * @param {*} prefOptions - The options for the slider (i.e. min, max values).
+ */
 const createSlider = (key, prefValue, prefOptions) => {
   const slider = document.createElement("input");
   slider.type = "range";
@@ -401,7 +446,7 @@ const createSlider = (key, prefValue, prefOptions) => {
   });
 
   slider.addEventListener("input", function() {
-    let value = (this.value - this.min) / (this.max - this.min) * 100;
+    const value = (this.value - this.min) / (this.max - this.min) * 100;
     this.style.background = `linear-gradient(to right, var(--accent-color) 0%, var(--accent-color) ${value}%, var(--switch-background-color) ${value}%, var(--switch-background-color) 100%)`;
   });
 
@@ -429,6 +474,11 @@ const getNewValueFromEvent = (e, prefType) => {
   }
 };
 
+/**
+ * Performs POST request to '/update-preference' route to update a given preference.
+ * @param {MouseEvent} e - The event that triggered the update.
+ * @returns {Promise<void>}
+ */
 const updatePreference = async (e) => {
   try {
     const prefName = e.target.id;
@@ -441,7 +491,7 @@ const updatePreference = async (e) => {
       },
       body: JSON.stringify({
         prefKey: prefName,
-        newValue: newValue,
+        newValue,
       }),
     }).then((res) => {res.json()});
 
@@ -474,8 +524,7 @@ async function GetRelativePath(path) {
  */
 function GetPreviousDir(path) {
   const splitPath = path.split("/");
-  const newPath = splitPath.slice(0, -1).join("/");
-  return newPath;
+  return splitPath.slice(0, -1).join("/");
 }
 
 /**
@@ -488,14 +537,17 @@ async function GetFavourites() {
       method: "GET",
     });
 
-    const favourites = await response.json();
-    return favourites;
+    return await response.json();
   } catch (error) {
     console.error("Error fetching favourites:", error);
     return [];
   }
 }
 
+/**
+ *
+ * @returns {Promise<Array>} A promise that resolves to an array of preferences.
+ */
 async function GetPreferences() {
   try {
     const response = await fetchWithAuth("/get-preferences", {
@@ -506,14 +558,20 @@ async function GetPreferences() {
       return [];
     }
 
-    const preferences = await response.json();
-    return preferences;
+    return await response.json();
   } catch (error) {
     console.error("Error fetching preferences:", error);
     return [];
   }
 }
 
+/**
+ * Performs POST request to '/file-search' route to search for files for a
+ * given search term.
+ * @param {string} searchTerm - The search term to search for.
+ * @returns {Promise<Array>} A promise that resolves to an array of files that
+ * match the search term.
+ */
 async function SearchForFiles(searchTerm) {
   try {
     const response = await fetchWithAuth("/file-search", {
@@ -528,8 +586,7 @@ async function SearchForFiles(searchTerm) {
       return [];
     }
 
-    const files = await response.json();
-    return files;
+    return await response.json();
   } catch (error) {
     console.error("Error fetching search results:", error);
     return [];
@@ -543,7 +600,7 @@ async function SearchForFiles(searchTerm) {
  */
 async function fetchFilesMetadata(path) {
   try {
-    const filesResponse = await fetchWithAuth("/metadata?path=" + path, {
+    const filesResponse = await fetchWithAuth(`/metadata?path=${path}`, {
       method: "GET",
     });
 
@@ -554,8 +611,7 @@ async function fetchFilesMetadata(path) {
       return null;
     }
 
-    const files = await filesResponse.json();
-    return files;
+    return await filesResponse.json();
   } catch (error) {
     console.error("Error fetching files metadata:", error);
     return null;
@@ -588,13 +644,16 @@ async function updateCurrentDir(path) {
   }
 }
 
+/**
+ * Performs a GET request to '/currdir' route to get the current directory.
+ * @returns {Promise<string|null>} A promise that resolves to the current directory, or null if an error occurs.
+ */
 async function getCurrentDir() {
   try {
     const response = await fetchWithAuth("/currdir", {
       method: "GET",
     }).then((res) => res.json());
-    const currDir = response.currDir;
-    return currDir;
+    return response.currDir;
   } catch (error) {
     console.error("Error getting current directory:", error);
     return null;
@@ -624,19 +683,15 @@ function createGridItem(file, i, gridFragment) {
     addShowContextMenuListeners(gridItem, file);
 
     const img = document.createElement("img");
-    img.id = "img-" + i;
+    img.id = `img-${i}`;
     img.className = "grid-img";
     img.src = GetFileIcon(file);
     gridItem.appendChild(img);
 
     const fileName = document.createElement("div");
-    fileName.id = "filename-" + i;
+    fileName.id = `filename-${i}`;
     fileName.className = "grid-filename";
-    if (userPreferences.showFileExtensions.prefValue) {
-      fileName.textContent = file.fileName + file.fileExt;
-    } else {
-      fileName.textContent = file.fileName;
-    }
+    fileName.textContent = userPreferences.showFileExtensions.prefValue ? file.fileName + file.fileExt : file.fileName;
     gridItem.appendChild(fileName);
 
     gridFragment.appendChild(gridItem);
@@ -645,11 +700,16 @@ function createGridItem(file, i, gridFragment) {
   });
 }
 
+/**
+ * Wrapper function for adding on click event listeners to the given item.
+ * @param {*} item - The item to add the event listener to.
+ * @param {*} file - The associated file.
+ */
 async function addClickEventListeners(item, file) {
   if (file.isDirectory) {
     item.addEventListener("click", (e) => {
       e.preventDefault();
-      init_files(file.dirPath + "/" + file.fileName);
+      init_files(`${file.dirPath}/${file.fileName}`);
     });
   } else {
     item.addEventListener("click", async (e) => {
@@ -658,6 +718,11 @@ async function addClickEventListeners(item, file) {
   }
 }
 
+/**
+ * Wrapper function for adding contextmenu (or touchstart/touchmove/touchend) event listeners to the given item.
+ * @param {*} gridItem - The item to add the event listener to.
+ * @param {*} file - The associated file.
+ */
 async function addShowContextMenuListeners(gridItem, file) {
   gridItem.addEventListener("contextmenu", (e) => {
     e.preventDefault();
@@ -686,7 +751,7 @@ async function addShowContextMenuListeners(gridItem, file) {
     const touchMoveX = e.touches[0].clientX;
     const touchMoveY = e.touches[0].clientY;
     const distanceMoved = Math.sqrt(
-      Math.pow(touchMoveX - touchStartX, 2) + Math.pow(touchMoveY - touchStartY, 2)
+      (touchMoveX - touchStartX) ** 2 + (touchMoveY - touchStartY) ** 2
     );
 
     if (distanceMoved > touchMoveThreshold) {
@@ -751,29 +816,33 @@ function createFavItem(file, i, favFragment) {
   });
 }
 
+/**
+ * Retreives a given file's icon based on its file extension.
+ * @param {*} file - The file to get the icon for.
+ * @returns {string} The path to the file icon.
+ */
 function GetFileIcon(file) {
   if (file.isDirectory) {
     return "/images/filetypes/folder.png";
-  } else {
-    const fileExtensions = new Set([
-      ".3ds", ".aac", ".ai", ".avi", ".bmp", ".cad", ".cdr", ".css", ".dat",
-      ".dll", ".doc", ".docx", ".eps", ".fla", ".flv", ".gif", ".html", ".indd",
-      ".iso", ".jpg", ".jpeg", ".js", ".midi", ".mov", ".mp3", ".mpg", ".pdf", ".php",
-      ".png", ".ppt", ".pptx", ".ps", ".psd", ".raw", ".sql", ".svg", ".tif", ".txt",
-      ".wmv", ".xls", ".xml", ".zip"
-    ]);
-
-    const basePath = "/images/filetypes/";
-    const sharedIconExtensions = {
-      ".jpeg": ".jpg",
-      ".doc": ".docx",
-      ".pptx": ".ppt",
-    };
-
-    const fileExt = sharedIconExtensions[file.fileExt] || file.fileExt;
-
-    return fileExtensions.has(fileExt) ? basePath + fileExt.slice(1) + ".png" : basePath + "file-unknown.png";
   }
+  const fileExtensions = new Set([
+    ".3ds", ".aac", ".ai", ".avi", ".bmp", ".cad", ".cdr", ".css", ".dat",
+    ".dll", ".doc", ".docx", ".eps", ".fla", ".flv", ".gif", ".html", ".indd",
+    ".iso", ".jpg", ".jpeg", ".js", ".midi", ".mov", ".mp3", ".mpg", ".pdf", ".php",
+    ".png", ".ppt", ".pptx", ".ps", ".psd", ".raw", ".sql", ".svg", ".tif", ".txt",
+    ".wmv", ".xls", ".xml", ".zip"
+  ]);
+
+  const basePath = "/images/filetypes/";
+  const sharedIconExtensions = {
+    ".jpeg": ".jpg",
+    ".doc": ".docx",
+    ".pptx": ".ppt",
+  };
+
+  const fileExt = sharedIconExtensions[file.fileExt] || file.fileExt;
+
+  return fileExtensions.has(fileExt) ? `${basePath + fileExt.slice(1)}.png` : `${basePath}file-unknown.png`;
 }
 
 
@@ -843,12 +912,10 @@ const removeEventListenerIfExists = (elementId, eventType, listenerKey) => {
     // Remove the event listener from the element
     element.removeEventListener(eventType, eventListeners[listenerKey]);
     // Set the event listener key in the eventListeners object to null
+  } else if (elementId === "window") {
+    window.removeEventListener(eventType, eventListeners[listenerKey]);
   } else {
-    if (elementId === "window") {
-      window.removeEventListener(eventType, eventListeners[listenerKey]);
-    } else {
-      document.removeEventListener(eventType, eventListeners[listenerKey]);
-    }
+    document.removeEventListener(eventType, eventListeners[listenerKey]);
   }
   eventListeners[listenerKey] = null;
 };
@@ -869,12 +936,10 @@ const addEventListenerAndStore = (elementId, eventType, listenerKey, listenerFn)
     // Store the event listener function in the eventListeners object
     // Add the event listener to the element
     element.addEventListener(eventType, eventListeners[listenerKey]);
+  } else if (elementId === "window") {
+    window.addEventListener(eventType, eventListeners[listenerKey]);
   } else {
-    if (elementId === "window") {
-      window.addEventListener(eventType, eventListeners[listenerKey]);
-    } else {
-      document.addEventListener(eventType, eventListeners[listenerKey]);
-    }
+    document.addEventListener(eventType, eventListeners[listenerKey]);
   }
 };
 
@@ -890,7 +955,11 @@ const setupEventListeners = () => {
 // Call setupEventListeners on script load
 setupEventListeners();
 
-var showUserPanel = (e) => {
+/**
+ * Shows the user panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ */
+const showUserPanel = (e) => {
   e.preventDefault();
   e.stopPropagation();
   const userPanel = document.getElementById("user-panel");
@@ -906,6 +975,10 @@ var showUserPanel = (e) => {
   });
 };
 
+/**
+ * Hides the user panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ */
 var hideUserPanel = (e) => {
   const userPanel = document.getElementById("user-panel");
   userPanel.style.opacity = 0;
@@ -914,18 +987,27 @@ var hideUserPanel = (e) => {
   }, 200);
 };
 
-var toggleUserPanel = (e) => {
+/**
+ * Toggles the user panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ */
+const toggleUserPanel = (e) => {
   const userPanel = document.getElementById("user-panel");
   if (userPanel.classList.contains("hidden")) {
     showUserPanel(e);
   } else {
     hideUserPanel();
   }
-}
+};
 
+/**
+ * Performs a download request for the given file.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {*} file - The file object to download.
+ */
 async function downloadFile(e, file) {
-  const token = localStorage.getItem('token'); // Get the JWT token from localStorage
-
+  e.preventDefault();
+  e.stopPropagation();
   try {
     const response = await fetchWithAuth('/download', {
       method: 'POST',
@@ -955,7 +1037,12 @@ async function downloadFile(e, file) {
   }
 }
 
-var deleteFile = async (e, file) => {
+/**
+ * Performs a delete request for the given file.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to delete.
+ */
+const deleteFile = async (e, file) => {
   const response = await fetchWithAuth('/file-delete', {
     method: 'POST',
     headers: {
@@ -964,18 +1051,23 @@ var deleteFile = async (e, file) => {
     body: JSON.stringify({ fileId: file._id }),
   });
 
-  if (!response.ok) {
-    throw new Error('Network response was not ok');
-  } else {
+  if (response.ok) {
     const data = await response.text();
+  } else {
+    throw new Error('Network response was not ok');
   }
 
   hideDeleteConfirm(e, file);
   getTotalStorage();
   init_files(currDir);
-}
+};
 
-var showDeleteConfirm = (e, file) => {
+/**
+ * Shows the delete confirmation panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to delete.
+ */
+const showDeleteConfirm = (e, file) => {
   e.preventDefault();
   showOverlay();
   removeEventListenerIfExists("delete-cancel-btn", "click", "hideDeleteConfirmListener");
@@ -991,8 +1083,14 @@ var showDeleteConfirm = (e, file) => {
 
   addEventListenerAndStore("delete-cancel-btn", "click", "hideDeleteConfirmListener", hideDeleteConfirm.bind(null, e, file));
   addEventListenerAndStore("delete-confirm-btn", "click", "deleteFileListener", deleteFile.bind(null, e, file));
-}
+};
 
+
+/**
+ * Hides the delete confirmation panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to delete.
+ */
 var hideDeleteConfirm = (e, file) => {
   hideOverlay();
   const deleteConfirmation = document.getElementById("delete-confirm");
@@ -1005,7 +1103,12 @@ var hideDeleteConfirm = (e, file) => {
   removeEventListenerIfExists("delete-cancel-btn", "click", "hideDeleteConfirmListener");
 }
 
-// Show file info panel
+
+/**
+ * Shows the file info panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to delete.
+ */
 const showFileInfo = async (e, file) => {
   e.preventDefault();
   e.stopPropagation();
@@ -1031,7 +1134,10 @@ const showFileInfo = async (e, file) => {
   window.addEventListener("click", hideFileInfo);
 };
 
-// Hide file info panel
+/**
+ * Hides the file info panel on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ */
 const hideFileInfo = (e) => {
   e.preventDefault();
   e.stopPropagation();
@@ -1048,8 +1154,13 @@ const hideFileInfo = (e) => {
   window.removeEventListener("click", hideFileInfo);
 };
 
-
-var favouriteFile = async (e, file) => {
+/**
+ * Toggles the 'isFavourite' attribute for a given file on trigger.
+ * Makes a POST request to the 'toggle-favourite' endpoint.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to toggle.
+ */
+const favouriteFile = async (e, file) => {
   const response = await fetchWithAuth('/toggle-favourite', {
     method: 'POST',
     headers: {
@@ -1063,6 +1174,11 @@ var favouriteFile = async (e, file) => {
   init_favourite_list();
 };
 
+/**
+ * Shows the rename file input field on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to rename.
+ */
 const renameFile = (e, file) => {
   const fileElement = document.getElementById(file._id);
   const fileName = fileElement.getElementsByClassName("grid-filename")[0];
@@ -1071,10 +1187,10 @@ const renameFile = (e, file) => {
   // Remove file extension from the file name
 
   editFileInputField.value = fileName.textContent.replace(file.fileExt, "");
-  editFileInputField.style.left = fileName.offsetParent.offsetLeft + fileName.offsetLeft + "px";
-  editFileInputField.style.top = fileName.offsetParent.offsetTop + fileName.offsetTop + "px";
+  editFileInputField.style.left = `${fileName.offsetParent.offsetLeft + fileName.offsetLeft}px`;
+  editFileInputField.style.top = `${fileName.offsetParent.offsetTop + fileName.offsetTop}px`;
 
-  editFileInputField.style.width = fileName.offsetParent.offsetWidth + "px";
+  editFileInputField.style.width = `${fileName.offsetParent.offsetWidth}px`;
   // editFileInputField.style.width = width + "px";
   editFileInputField.focus();
   editFileInputField.select();
@@ -1084,12 +1200,13 @@ const renameFile = (e, file) => {
 
   var hideInputField = (e) => {
     const renameItem = document.getElementById("rename-file");
-    if (e.target !== editFileInputField && e.target !== fileName && e.target !== renameItem) {
-      fileName.classList.remove("hidden");
-      editFileInputField.classList.add("hidden");
-      editFileInputField.removeEventListener("keydown", keyEnterEvent);
-      window.removeEventListener("click", hideInputField);
+    if (!(e.target !== editFileInputField && e.target !== fileName && e.target !== renameItem)) {
+      return;
     }
+    fileName.classList.remove("hidden");
+    editFileInputField.classList.add("hidden");
+    editFileInputField.removeEventListener("keydown", keyEnterEvent);
+    window.removeEventListener("click", hideInputField);
   };
 
   var keyEnterEvent = async (e) => {
@@ -1111,12 +1228,15 @@ const renameFile = (e, file) => {
       editFileInputField.removeEventListener("keydown", keyEnterEvent);
       window.removeEventListener("click", hideInputField);
       LoadPage(true);
-    } else if (e.key === "Escape") {
-      fileName.classList.remove("hidden");
-      editFileInputField.classList.add("hidden");
-      editFileInputField.removeEventListener("keydown", keyEnterEvent);
-      window.removeEventListener("click", hideInputField);
+      return;
     }
+    if (e.key !== "Escape") {
+      return;
+    }
+    fileName.classList.remove("hidden");
+    editFileInputField.classList.add("hidden");
+    editFileInputField.removeEventListener("keydown", keyEnterEvent);
+    window.removeEventListener("click", hideInputField);
   };
 
   editFileInputField.addEventListener("keydown", keyEnterEvent);
@@ -1124,6 +1244,13 @@ const renameFile = (e, file) => {
   window.addEventListener("click", hideInputField);
 }
 
+/**
+ * Makes a POST request to the 'file-move' endpoint to move a file to a new
+ * directory.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {*} file - The file object to move.
+ * @returns
+ */
 const moveFile = async (e, file) => {
   e.preventDefault();
   e.stopPropagation();
@@ -1175,20 +1302,35 @@ function playAnimations(menu, animationType) {
   }, 60 * items.length + 10);
 }
 
+/**
+ * Shows the background overlay on trigger.
+ */
 const showOverlay = () => {
   const overlay = document.getElementById("overlay");
   overlay.classList.remove("closed");
   overlay.classList.add("open");
 };
 
+
+/**
+ * Hides the background overlay on trigger.
+ */
 const hideOverlay = () => {
   const overlay = document.getElementById("overlay");
   overlay.classList.remove("open");
   overlay.classList.add("closed");
 };
 
+
+/**
+ * Shows the dropdown context menu for a given file on trigger.
+ * Adds the file specific event listeners for each of the context menu items.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to show.
+ */
 const showContextMenu = async (e, file) => {
-  let x, y;
+  let x;
+  let y;
   if (e.type === "touchstart" && e.changedTouches) {
     x = e.changedTouches[0].clientX;
     y = e.changedTouches[0].clientY;
@@ -1241,6 +1383,11 @@ const showContextMenu = async (e, file) => {
   addEventListenerAndStore(null, "click", "hideContextMenuListener", hideContextMenu.bind(null, e, file));
 };
 
+/**
+ * Shows the file move popup on trigger.
+ * @param {MouseEvent} e - The event object for the click event.
+ * @param {Object} file - The file object to show.
+ */
 const showMoveFile = (e, file) => {
   const moveFileContainer = document.getElementById("move-file-container");
   showOverlay();
@@ -1270,25 +1417,31 @@ const hideMoveFile = (e) => {
 
 /**
  * Hide context menu and remove event listeners
+ * @param {Event} e - The event that triggered this function
+ * @param {Object} file - The file object
  */
 const hideContextMenu = (e, file) => {
   const contextMenu = document.getElementById("context-menu");
-  if (!contextMenu.contains(e.target)) {
-    contextMenu.classList.remove("opening");
-    contextMenu.classList.add("closing");
-    contextMenu.classList.remove(file._id);
-    setAnimationDelays(contextMenu, 'closing');
-    playAnimations(contextMenu, 'closing');
-
-    removeEventListenerIfExists(null, "click", "hideContextMenuListener");
-    removeEventListenerIfExists("download-file", "click", "downloadFileListener");
-    removeEventListenerIfExists("rename-file", "click", "renameFileListener");
-    removeEventListenerIfExists("file-info", "click", "showFileInfoListener");
-    removeEventListenerIfExists("favourite-file", "click", "favouriteFileListener");
-    removeEventListenerIfExists("delete-file", "click", "showDeleteConfirmListener");
+  if (contextMenu.contains(e.target)) {
+    return;
   }
+  contextMenu.classList.remove("opening");
+  contextMenu.classList.add("closing");
+  contextMenu.classList.remove(file._id);
+  setAnimationDelays(contextMenu, 'closing');
+  playAnimations(contextMenu, 'closing');
+
+  removeEventListenerIfExists(null, "click", "hideContextMenuListener");
+  removeEventListenerIfExists("download-file", "click", "downloadFileListener");
+  removeEventListenerIfExists("rename-file", "click", "renameFileListener");
+  removeEventListenerIfExists("file-info", "click", "showFileInfoListener");
+  removeEventListenerIfExists("favourite-file", "click", "favouriteFileListener");
+  removeEventListenerIfExists("delete-file", "click", "showDeleteConfirmListener");
 };
 
+/**
+ * Creates an input field for uploading a file
+ */
 const uploadListener = () => {
   const input = document.createElement("input");
   input.type = "file";
@@ -1309,7 +1462,11 @@ const uploadListener = () => {
   input.click();
 };
 
-
+/**
+ * Handles uploading a file to the server by sending a POST request to the
+ *  '/upload' endpoint.
+ * @param {*} files - The list of files to upload
+ */
 const uploadFiles = async (files) => {
   const formData = new FormData();
   const filePaths = [];
@@ -1421,6 +1578,9 @@ document.getElementById("user-panel-logout").addEventListener("click", logout);
 
 let focusTriggered = false;
 
+/**
+ * Handles the focus event - triggers a page load if it hasn't been triggered
+ */
 function handleFocus() {
   if (!focusTriggered) {
     focusTriggered = true;
@@ -1432,16 +1592,20 @@ function handleBlur() {
   focusTriggered = false;
 }
 
+/**
+ * Handles the visibility change event
+ */
 function handleVisibilityChange() {
-  if (!document.hidden) {
-    handleFocus();
-  } else {
+  if (document.hidden) {
     handleBlur();
+  } else {
+    handleFocus();
   }
 }
 
-
-
+/**
+ * Handles the DOMContentLoaded event - adds the event listeners for the sidebar
+ */
 document.addEventListener('DOMContentLoaded', function () {
   const sidebarToggle = document.getElementById('menu-btn');
   const sidebar = document.getElementById('sidebar');
@@ -1475,15 +1639,22 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 
-
+/**
+ * Makes a GET request to the '/basedir' endpoint and returns the base
+ * directory.
+ * @returns {Promise<string>} The base directory
+ */
 var getBaseDir = async () => {
   const result = await fetchWithAuth("/basedir", {
     method: "GET",
   }).then((res) => res.json());
-  const baseDir = result.baseDir;
-  return baseDir;
+  return result.baseDir;
 }
 
+/**
+ * Handles the logout event, making a GET request to the '/logout' endpoint and
+ * redirects to the login page
+ */
 function logout() {
   const result = fetch("/logout", {
     method: "GET",
@@ -1494,6 +1665,12 @@ function logout() {
 
 }
 
+
+/**
+ * Makes a GET request to the '/last-sync' endpoint and returns the last
+ * sync date.
+ * @returns {Promise<string>} The last sync date
+ */
 async function getLastSync() {
   const result = await fetchWithAuth("/last-sync", {
     method: "GET",
@@ -1504,29 +1681,37 @@ async function getLastSync() {
   const lastSync = await result.json();
   // Update last sync on page
   const readableDate = await ConvertDate(lastSync.lastSync);
-  var lastSyncElement = document.getElementById("last-updated");
+  const lastSyncElement = document.getElementById("last-updated");
   lastSyncElement.textContent = `Last Updated: ${readableDate}`;
   return lastSync;
 }
 
+/**
+ * Starts the interval to call getLastSync every minute
+ */
 function startLastSyncInterval() {
   // Call the function immediately to update the text element
   getLastSync();
 
   // Set up the interval to call getLastSync every minute
-  setInterval(getLastSync, 60000);
+  setInterval(getLastSync, 60_000);
 }
 
+/**
+ * Makes a GET request to the '/storage-info' endpoint and returns the total
+ * storage and used storage for the host system (in Bytes).
+ * @returns {Promise<void>}
+ */
 async function getTotalStorage() {
   const storageInfo = await fetchWithAuth("/storage-info", {
     method: "GET",
   }).then((res) => res.json());
-  var totalStorage = storageInfo.totalStorage * (userPreferences.storageAllocation.prefValue / 100);
-  var usedStorage = storageInfo.usedStorage;
+  const totalStorage = storageInfo.totalStorage * (userPreferences.storageAllocation.prefValue / 100);
+  const usedStorage = storageInfo.usedStorage;
 
-  var storageRatio = (usedStorage / totalStorage) * 100;
+  const storageRatio = (usedStorage / totalStorage) * 100;
 
-  var storageElement = document.getElementById("system-total-storage");
+  const storageElement = document.getElementById("system-total-storage");
   storageElement.textContent = `Used: ${BytesToSize(usedStorage)} / ${BytesToSize(totalStorage)}`;
 
   const progressBarFill = document.getElementById("progress-bar-fill");
@@ -1548,6 +1733,9 @@ async function getTotalStorage() {
   }
 }
 
+/**
+ * Makes a GET request to the '/sync' endpoint to sync the local files with the server.
+ */
 async function SyncWithServer() {
   const result = await fetchWithAuth("/sync", {
     method: "GET",
@@ -1560,6 +1748,10 @@ async function SyncWithServer() {
   }
 }
 
+/**
+ * Performs page load operations
+ * @param {*} soft - If true, the page will be loaded softly (i.e. the current directory will not be reset to the base directory)
+ */
 async function LoadPage(soft = false) {
   let path;
   userPreferences = await GetPreferences();
@@ -1572,17 +1764,21 @@ async function LoadPage(soft = false) {
   getTotalStorage();
 }
 
+/**
+ * Performs a GET request to the '/username' endpoint and returns the username
+ * for a given userID.
+ * @returns {Promise<object>} The username
+ */
 async function GetUsername() {
-  const result = await fetchWithAuth("/username", {
+  return await fetchWithAuth("/username", {
     method: "GET",
   }).then((res) => res.json());
-  return result;
 }
 
 const showFileViewer = async (e, file) => {
   e.preventDefault();
   // Open file here
-  console.log("Opening file: " + file.fileName + file.fileExt);
+  console.log(`Opening file: ${file.fileName}${file.fileExt}`);
   fileView = true;
 
   const fileViewerContent = document.getElementById("file-viewer-content");
@@ -1641,6 +1837,12 @@ const showFileViewer = async (e, file) => {
   // addEventListenerAndStore("file-viewer", "click", "closeFileViewerListener", closeFileViewer);
 };
 
+/**
+ * Handles rendering a text-based file in the file viewer with syntax
+ * highlighting (using PrismJS).
+ * @param {*} textData - The text data to render
+ * @param {*} fileType - The file type (e.g. text, javascript, css, markup, etc.)
+ */
 async function renderTextFile(textData, fileType) {
   const fileViewerContent = document.getElementById('file-viewer-content');
 
@@ -1650,11 +1852,11 @@ async function renderTextFile(textData, fileType) {
 
   // Create and configure the pre element for PrismJS with line-numbers class
   const preElement = document.createElement('pre');
-  preElement.className = 'line-numbers language-' + fileType;
+  preElement.className = `line-numbers language-${fileType}`;
 
   // Create and configure the code element for PrismJS
   const codeElement = document.createElement('code');
-  codeElement.classList.add('language-' + fileType); // Set the language for PrismJS
+  codeElement.classList.add(`language-${fileType}`); // Set the language for PrismJS
   codeElement.textContent = textData;
 
   // Add the code element to the pre element
@@ -1675,10 +1877,14 @@ function getPageNumberFromElement(element) {
   return parseInt(element.id.split('-')[2], 10);
 }
 
+/**
+ * Handles rendering a PDF file in the file viewer (using pdfjs-dist).
+ * @param {*} pdfDataStream - The PDF data stream to render from.
+ */
 async function renderPDF(pdfDataStream) {
   try {
     const pageBuffer = 5;
-    pdf = await pdfjsLib.getDocument({ url: pdfDataStream, rangeChunkSize: 65536 }).promise;
+    pdf = await pdfjsLib.getDocument({ url: pdfDataStream, rangeChunkSize: 65_536 }).promise;
     const numPages = pdf.numPages;
     const container = document.getElementById('file-viewer-content');
 
@@ -1796,11 +2002,12 @@ async function renderPDF(pdfDataStream) {
       .filter((el) => el.tagName === "CANVAS" && el.id.startsWith("pdf-canvas-"))
       .filter(isInViewport);
 
-      if (visiblePages.length > 0) {
-        const firstVisiblePage = getPageNumberFromElement(visiblePages[0]);
-        document.getElementById("current-page").textContent = firstVisiblePage;
-        document.getElementById("total-pages").textContent = numPages;
+      if (!(visiblePages.length > 0)) {
+        return;
       }
+      const firstVisiblePage = getPageNumberFromElement(visiblePages[0]);
+      document.getElementById("current-page").textContent = firstVisiblePage;
+      document.getElementById("total-pages").textContent = numPages;
     }
 
     removeEventListenerIfExists("window", "scroll", "checkVisibilityScrollListener");
@@ -1822,6 +2029,9 @@ async function renderPDF(pdfDataStream) {
   }
 }
 
+/**
+ * Close the file viewer and cleans up resources
+ */
 const closeFileViewer = async () => {
   const pageContent = document.getElementById("file-viewer-content");
   fileView = false;
@@ -1835,7 +2045,7 @@ const closeFileViewer = async () => {
   }
 
   // Clean up internal resources for rendered pages
-  for (let canvas of renderedPages.values()) {
+  for (const canvas of renderedPages.values()) {
     const page = await pdf.getPage(getPageNumberFromElement(canvas));
     await page.cleanup();
   }
@@ -1866,7 +2076,10 @@ const closeFileViewer = async () => {
   removeEventListenerIfExists("file-viewer", "click", "closeFileViewerListener");
 };
 
-
+/**
+ * Applies the appropriate theme class to the body element based on the user
+ * preferences.
+ */
 async function GetTheme() {
   if (userPreferences.useDarkTheme.prefValue == true) {
     document.body.classList.add("dark-theme");
@@ -1875,25 +2088,39 @@ async function GetTheme() {
   }
 }
 
+/**
+ * Performs a GET request to the /sys-uptime API endpoint and updates the
+ * system uptime text with the response.
+ */
 async function GetUptime() {
   const response = await fetchWithAuth("/sys-uptime");
   const uptime = await response.json();
   document.getElementById("system-uptime").textContent = `Uptime: ${ConvertTime(uptime.uptime)}`;
 }
 
+/**
+ * Handles throttling of events to limit the number of times a listener is
+ * fired.
+ * @param {*} func - The function to throttle
+ * @param {*} limit - The minimum time between calls to the function
+ */
 function throttle(func, limit) {
   let inThrottle;
   return function () {
     const args = arguments;
-    const context = this;
-    if (!inThrottle) {
-      func.apply(context, args);
-      inThrottle = true;
-      setTimeout(() => (inThrottle = false), limit);
+    if (inThrottle) {
+      return;
     }
+    func.apply(this, args);
+    inThrottle = true;
+    setTimeout(() => (inThrottle = false), limit);
   };
 }
 
+
+/**
+ * Performs a POST request to '/token' API endpoint to generate a new access token for authenticating with the server.
+ */
 async function GenerateNewAccessToken() {
   const response = await fetch('/token', {
     method: 'POST',
@@ -1903,12 +2130,12 @@ async function GenerateNewAccessToken() {
     console.log("Access token Generated");
   } else {
     console.log("Error generating access token");
-    console.log(await response);
+    console.log(response);
   }
 }
 
 
-// Initialise the grid on page load
+// Handles the initial loading of the page, generating dynamic content on the page
 window.onload = async () => {
   await GenerateNewAccessToken();
   SyncWithServer();

@@ -56,11 +56,11 @@ function signUp(event) {
     if (res.status === 201) {
       // Use server to redirect the user to the homepage
       window.location.href = "/login";
-    } else {
-      console.log(res);
-      errorMessage.innerText = "Incorrect username or password";
-      errorMessage.classList.add('show');
+      return;
     }
+    console.log(res);
+    errorMessage.innerText = "Incorrect username or password";
+    errorMessage.classList.add('show');
   });
 }
 

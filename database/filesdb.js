@@ -10,7 +10,7 @@ const collectionName = "files";
 
 async function GetDocumentsWithRoot(root, userId, deep=false) {
   if (deep) {
-    var query = new RegExp("^" + root + "(\\/.*)*$");
+    const query = new RegExp(`^${root}(\\/.*)*$`);
     return QueryCollection({ "dirPath" : { $regex: query } }, collectionName);
   } else {
     return QueryCollection({ "fileOwner": userId, "dirPath": root }, collectionName);
@@ -43,7 +43,7 @@ function getFileMetadata(filePath) {
   // First we need to check whether the path is valid!
   // console.log(filePath);
   if (pathExists(filePath)) {
-    console.log("Path does not exist at " + filePath + "!");
+    console.log(`Path does not exist at ${filePath}!`);
     return null;
   }
   // Initialise variables
@@ -59,25 +59,20 @@ function getFileMetadata(filePath) {
       //Checking for errors
       if(err){
           reject(err);
+        return;
       }
-      else {
-        //Logging the stats Object
-        fileData.fileSize = stats.size;
-        fileData.lastModified = stats.mtime;
-        fileData.lastViewed = stats.atime;
-        fileData.uploadDate = stats.birthtime;
-        const schema = GetDBSchema(collectionName);
-        // iterate over each schema element, and set its value to the corresponding key in the fileData object
-        for (const [key, value] of Object.entries(schema)) {
-          if (key in fileData) {
-            schema[key] = fileData[key];
-          } else {
-            schema[key] = getDefaultAttributeValue(value);
-          }
+      //Logging the stats Object
+      fileData.fileSize = stats.size;
+      fileData.lastModified = stats.mtime;
+      fileData.lastViewed = stats.atime;
+      fileData.uploadDate = stats.birthtime;
+      const schema = GetDBSchema(collectionName);
+      // iterate over each schema element, and set its value to the corresponding key in the fileData object
+      for (const [key, value] of Object.entries(schema)) {
+        schema[key] = key in fileData ? fileData[key] : getDefaultAttributeValue(value);
 
-        }
-        resolve(schema);
       }
+      resolve(schema);
     });
   })
 }
@@ -95,24 +90,24 @@ function pathExists(filePath) {
 
 function isDir(path) {
   try {
-      var stat = lstatSync(path);
+      const stat = lstatSync(path);
       return stat.isDirectory();
   } catch (e) {
       // lstatSync throws an error if path doesn't exist
-      console.log("Path: " + path + " does not exist!");
+      console.log(`Path: ${path} does not exist!`);
       return false;
   }
 }
 
 function ZipDir(source, callback) {
-  const target = source + '.zip';
+  const target = `${source}.zip`;
   const stream = fs.createWriteStream(target);
   const archive = archiver('zip', { zlib: { level: 9 } });
 
   stream.on('close', function() {
-    console.log(archive.pointer() + ' total bytes');
+    console.log(`${archive.pointer()} total bytes`);
     console.log('archiver has been finalized and the output file descriptor has closed.');
-    console.log("Zip file created at " + target);
+    console.log(`Zip file created at ${target}`);
     callback(null);
   });
 
@@ -129,7 +124,7 @@ function ZipDir(source, callback) {
       console.log("Error creating zip file! (2)");
       callback(err);
     } else {
-      console.log('Zip file created: ' + target);
+      console.log(`Zip file created: ${target}`);
       callback(null);
     }
   });
@@ -141,7 +136,7 @@ async function InsertFilesystem(dir, userId) {
     const dirName = dirname(filePath);
     const fileExt = extname(filePath);
     const baseName = basename(filePath, fileExt);
-    const query = { dirPath: dirName, fileName: baseName, fileExt: fileExt, fileOwner: userId };
+    const query = { dirPath: dirName, fileName: baseName, fileExt, fileOwner: userId };
     QueryCollection(query, collectionName).then(result => {
       if (result.length == 0) {
         getFileMetadata(filePath).then(metadata => {
@@ -166,7 +161,7 @@ async function SyncDBWithFilesystem(dir, userId) {
       try {
         await fs.promises.access(filePath);
       } catch (err) {
-        console.log("Deleting " + filePath);
+        console.log(`Deleting ${filePath}`);
         RemoveDocument(documents[i], collectionName);
       }
     }
@@ -185,14 +180,14 @@ async function MoveFile(file, newPath, userId) {
           const oldfPath = path.join(documents[i].dirPath);
           const newfPath = oldfPath.replace(oldPath, path.join(newPath, file.fileName));
           UpdateDocument(documents[i], {"dirPath": newfPath}, collectionName);
-          console.log("Updating " + oldfPath + " to " + newfPath);
+          console.log(`Updating ${oldfPath} to ${newfPath}`);
         }
       }
     });
 
     const currentDate = new Date();
     await UpdateDocument(file, {"dirPath" : newPath, "lastModified" : currentDate}, collectionName);
-    console.log("Moving " + file.fileName + " from " + file.dirPath +  " to " + newPath + " at " + currentDate);
+    console.log(`Moving ${file.fileName} from ${file.dirPath} to ${newPath} at ${currentDate}`);
 
   } catch (error) {
     console.error(error);
@@ -224,14 +219,14 @@ async function RenameFile(file, newName, userId) {
           const oldPath = path.join(documents[i].dirPath);
           const newPath = oldPath.replace(oldName, newName);
           UpdateDocument(documents[i], {"dirPath": newPath}, collectionName);
-          console.log("Updating " + oldPath + " to " + newPath);
+          console.log(`Updating ${oldPath} to ${newPath}`);
         }
       }
     });
 
     const currentDate = new Date();
     await UpdateDocument(file, {"fileName" : newName, "lastModified" : currentDate}, collectionName);
-    console.log("Updating " + oldName + " to " + newName + " at " + currentDate);
+    console.log(`Updating ${oldName} to ${newName} at ${currentDate}`);
 
   } catch (error) {
     console.error(error);

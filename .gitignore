@@ -1,3 +1,7 @@
 .DS_Store
 node_modules
 .env
+**/server.key
+**/server.cert
+**/server.csr
+unused_fragments.js

@@ -5,13 +5,13 @@ import { hashPassword } from './crypt.js';
 const collectionName = "users";
 
 async function NewUser(userName, userPass, basedir) {
-  var userData;
+  let userData;
   const hashedPass = await hashPassword(userPass);
 
   userPass = null;
   const schema = await GetDBSchema(collectionName);
   userData = {
-    userName: userName,
+    userName,
     userPass: hashedPass,
   };
 
@@ -26,8 +26,7 @@ async function NewUser(userName, userPass, basedir) {
   userData.userDefaults.lastSync = new Date();
 
   try {
-    const result = await InsertDocument(userData, collectionName);
-    return result;
+    return await InsertDocument(userData, collectionName);
   } catch (err) {
     console.log(err);
     return null;
@@ -39,7 +38,7 @@ function GetUserById(id) {
 }
 
 async function GetUserByCreds(userName) {
-  const query = { userName: userName };
+  const query = { userName };
   return await QueryCollection(query, collectionName);
 }
 
@@ -59,7 +58,7 @@ async function GetCurrDir(userId) {
 
 async function UpdateRefreshToken(userId, refreshToken) {
   const user = await GetDocumentById(userId, collectionName);
-  return await UpdateDocument(user[0], { refreshToken: refreshToken }, collectionName);
+  return await UpdateDocument(user[0], { refreshToken }, collectionName);
 }
 
 

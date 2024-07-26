@@ -107,8 +107,8 @@ async function DocumentExists(document, collectionName) {
 
 /**
  * Performs an insert operation to the given collection.
- * @param {*} document - The document to insert
- * @param {*} collectionName - The name of the collection to insert into
+ * @param {Document} document - The document to insert
+ * @param {string} collectionName - The name of the collection to insert into
  * @returns {Promise} - A promise that resolves to the result of the insert operation
  */
 async function InsertDocument(document, collectionName) {
@@ -122,10 +122,8 @@ async function InsertDocument(document, collectionName) {
     const exists = await DocumentExists(document, collectionName);
 
     if (exists) {
-      console.log("Document already exists in database!");
     } else {
       const result = await collection.insertOne(document); // Inserts the document, comment out for debugging
-      console.log("Inserted 1 document into the collection");
       return result;
     }
   } catch (err) {

@@ -1,0 +1,8 @@
+{
+    "title": "Self Hosted Cloud",
+    "description": "A privacy-oriented cloud storage system, designed for intuitive and secure management of personal data. Upload and access your files from anywhere, with the peace of mind that your data is encrypted, secure and private. Preview images and documents directly from the browser.",
+    "technologies": ["Node.js", "JavaScript", "HTML", "CSS"],
+    "image": "self-hosted-cloud.png",
+    "source": "https://github.com/TGasco",
+    "featured": true
+}

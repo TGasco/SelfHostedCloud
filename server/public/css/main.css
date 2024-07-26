@@ -19,9 +19,9 @@
     --border-color: #c8c8c8;
     --switch-background-color: #d4d4d4;
     --highlight-text-color: #464e55;
-    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
     max-width: 100%;
     height: 100%;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
 }
 
 body.dark-theme {

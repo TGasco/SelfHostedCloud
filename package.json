@@ -5,7 +5,8 @@
   "main": "server/server.js",
   "scripts": {
     "start": "node --experimental-modules server/server.js",
-    "devstart": "nodemon server/server.js"
+    "devstart": "nodemon server/server.js",
+    "test": "mocha \"test/**/*.test.js\" --recursive --timeout 60000 --require server/server.js"
   },
   "keywords": [],
   "author": "",
@@ -35,6 +36,9 @@
   "type": "module",
   "devDependencies": {
     "@types/mocha": "^10.0.1",
-    "nodemon": "^2.0.22"
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "nodemon": "^2.0.22",
+    "sinon-chai": "^3.7.0"
   }
 }

@@ -10,7 +10,6 @@ This is a self-hosted cloud service built using Node.js, Express, and various ot
 - Content Security Policy with Helmet
 - Compression middleware for faster transfer speeds
 - Cookie parser for handling cookies
-- Favicon support
 
 ## Prerequisites
 
@@ -65,6 +64,8 @@ You can customize the following configurations in the `server.js` file:
 ## Usage
 
 Visit `https://localhost:8081` in your browser to access the web interface. You can upload, download, and manage your files through this interface.
+
+Files are stored on the host device, at a specified location (default '~/MyCloudDrive'). This can be changed to a locations of your choice when creating an account.
 
 ## Contributing
 

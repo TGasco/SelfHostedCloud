@@ -256,7 +256,7 @@ async function init_list_view(documents, elementId, onClickListener, allowFileVi
   const documentFragment = document.createDocumentFragment();
 
   try {
-      // Create an array of promises for creating list items
+    // Create an array of promises for creating list items
     const docPromises = documents.map((file, i) => createItem(file, i, documentFragment, allowFileView, onClickListener.bind(null, file)));
 
     // Wait for all the promises to resolve
@@ -1032,6 +1032,7 @@ async function downloadFile(e, file) {
     link.setAttribute('download', `${file.fileName}${file.fileExt}`);
     document.body.appendChild(link);
     link.click();
+    link.remove();
   } catch (error) {
     console.error('There was a problem with the fetch operation:', error);
   }
@@ -1787,19 +1788,18 @@ const showFileViewer = async (e, file) => {
   // Fetch the file data from the server
   const { url, contentType, releaseURL } = await fetchStreamedFile(file._id);
 
-  // if (contentType === "application/pdf") {
   if(file.fileExt == ".pdf") {
     // Load the pdfData into the pdfViewer
     renderPDF(url);
-    // renderPDF(file._id);
 
   } else if (contentType.startsWith("image/")) {
     // Render an image
-    const img = document.createElement('img');
-    img.src = url;
-    img.alt = file.fileName + file.fileExt;
-    img.classList.add("pdf-canvas");
-    fileViewerContent.appendChild(img);
+    renderImg(url, file);
+    // const img = document.createElement('img');
+    // img.src = url;
+    // img.alt = file.fileName + file.fileExt;
+    // img.classList.add("pdf-canvas");
+    // fileViewerContent.appendChild(img);
   } else if (contentType.startsWith("text/")) {
     // Render a text file with syntax highlighting
     const fileExtensionToLanguage = {
@@ -1809,7 +1809,6 @@ const showFileViewer = async (e, file) => {
       '.py': 'python',
       '.java': 'java',
       '.cpp': 'cpp',
-      // Add more mappings as needed
     };
 
     const response = await fetch(url);
@@ -1836,6 +1835,15 @@ const showFileViewer = async (e, file) => {
   // Add close event listener to the file viewer
   // addEventListenerAndStore("file-viewer", "click", "closeFileViewerListener", closeFileViewer);
 };
+
+async function renderImg(url, file) {
+  const fileViewerContent = document.getElementById('file-viewer-content');
+  const img = document.createElement('img');
+  img.src = url;
+  img.alt = file.fileName + file.fileExt;
+  img.classList.add("pdf-canvas");
+  fileViewerContent.appendChild(img);
+}
 
 /**
  * Handles rendering a text-based file in the file viewer with syntax
@@ -2035,7 +2043,7 @@ async function renderPDF(pdfDataStream) {
 const closeFileViewer = async () => {
   const pageContent = document.getElementById("file-viewer-content");
   fileView = false;
-  // Reset the page inidicator
+  // Reset the page indicator
   document.getElementById("current-page").textContent = 1;
   document.getElementById("total-pages").textContent = 1;
 

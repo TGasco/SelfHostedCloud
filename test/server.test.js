@@ -1,27 +1,29 @@
-import { expect as _expect, assert as _assert, should as _should } from 'chai';
+import chai, { expect as _expect, assert as _assert, should as _should } from 'chai';
+import sinonChai from 'sinon-chai';
 const expect = _expect;
 const assert = _assert;
 const should = _should();
 import { describe as _describe, it as _it } from 'mocha';
+import express from 'express';
 const describe = _describe;
 const it = _it;
-
+chai.use(sinonChai);
 describe('Express Middleware', () => {
   it('should use body parser middleware to parse request body', () => {
-    expect(app.use).to.have.been.calledWith(bodyParser.urlencoded({ extended: false }));
-    expect(app.use).to.have.been.calledWith(bodyParser.json());
+    expect(chai.use).to.have.been.calledWith(bodyParser.urlencoded({ extended: false }));
+    expect(chai.use).to.have.been.calledWith(bodyParser.json());
   });
 
   it('should use cookie parser middleware', () => {
-    expect(app.use).to.have.been.calledWith(cookieParser());
+    expect(chai.use).to.have.been.calledWith(cookieParser());
   });
 
   it('should use compression middleware', () => {
-    expect(app.use).to.have.been.calledWith(compression());
+    expect(chai.use).to.have.been.calledWith(compression());
   });
 
   it('should use CORS middleware', () => {
-    expect(app.use).to.have.been.calledWith(cors({
+    expect(chai.use).to.have.been.calledWith(cors({
       origin: ["https://localhost:8081"],
       credentials: true,
       methods: ["GET", "POST"],
@@ -30,7 +32,7 @@ describe('Express Middleware', () => {
   });
 
   it('should use helmet middleware', () => {
-    expect(app.use).to.have.been.calledWith(helmet({
+    expect(chai.use).to.have.been.calledWith(helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'", "blob:",], // Allow content from the same origin
@@ -54,7 +56,7 @@ describe('Express Middleware', () => {
   });
 
   it('should serve favicon', () => {
-    expect(app.use).to.have.been.calledWith(serveFavicon(join(publicPath, "favicon.ico")));
+    expect(chai.use).to.have.been.calledWith(serveFavicon(join(publicPath, "favicon.ico")));
   });
 
   it('should set Content-Type header for .js files', () => {
@@ -62,11 +64,11 @@ describe('Express Middleware', () => {
   });
 
   it('should use express static middleware', () => {
-    expect(app.use).to.have.been.calledWith(express.static(publicPath));
+    expect(chai.use).to.have.been.calledWith(express.static(publicPath));
   });
 
   it('should use router middleware for all requests', () => {
-    expect(app.use).to.have.been.calledWith(router);
+    expect(chai.use).to.have.been.calledWith(router);
   });
 });
 

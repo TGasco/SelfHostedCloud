@@ -8,6 +8,14 @@ import { InsertDocument, QueryCollection, UpdateDocument, GetDBSchema, getDefaul
 // Define the MongoDB connection URI
 const collectionName = "files";
 
+/**
+ * Query the 'files' collection for all files with the given root directory.
+ * @param {string} root - The root directory to search for files in.
+ * @param {string} userId - The ID of the user to search for files for.
+ * @param {bool} deep - When true, search recursively for all files in the
+ * given root directory and subdirectories.
+ * @returns {Promise<Document>} A promise that resolves to an array of file objects.
+ */
 async function GetDocumentsWithRoot(root, userId, deep=false) {
   if (deep) {
     const query = new RegExp(`^${root}(\\/.*)*$`);
@@ -200,7 +208,6 @@ async function MoveFile(file, newPath, userId) {
         }
     });
   }
-
 }
 
 async function RenameFile(file, newName, userId) {

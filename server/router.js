@@ -53,10 +53,11 @@ function authenticateToken(req, res, next) {
   // If token is present, verify it
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      // Redirect user to login page
+      // If token is invalid, respond with 401
       console.log("Token verification failed!");
       res.sendStatus(401);
     } else {
+      // If token is valid, set req.decoded to decoded token and continue
       req.decoded = decoded;
       next();
     }
@@ -276,7 +277,7 @@ router.get("/get-favourites", authenticateToken, (req, res) => {
   });
 });
 
-// GET Request - Returns the list of preferences for a given user
+// GET Request: Protected - Returns the list of preferences for a given user
 router.get("/get-preferences", authenticateToken, (req, res) => {
   const decoded = req.decoded;
   if (!decoded) {
@@ -699,7 +700,7 @@ router.post("/file-search", authenticateToken, (req, res) => {
           fileOwner: userId,
         },
       },
-      { $sort: { "searchTermIndex.idx": 1, lastViewed: -1, isFavourite: -1 } },
+      { $sort: { "searchTermIndex.idx": 1, lastViewed: -1, isFavourite: -1, isDirectory: -1 } },
       { $project: { searchTermIndex: 0 } },
     ];
 
@@ -727,6 +728,7 @@ router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
   const filePath = join(file[0].dirPath, file[0].fileName + file[0].fileExt);
 
   try {
+    // Check if file exists on the filesystem
     const stat = await fs.promises.stat(filePath);
 
     if (!stat.isFile()) {
@@ -734,12 +736,16 @@ router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
       return;
     }
 
+    // Update last viewed time in file document
     UpdateDocument(file[0], { lastViewed: new Date() }, "files");
 
     let contentType = mime.getType(filePath);
     if (!contentType) {
       contentType = "text/plain";
     }
+
+    // Edge case: Render text-based files (i.e. JavaScript) as plain text
+    // instead of being interpreted by the browser
     if (contentType.startsWith("application") && !contentType.startsWith("application/pdf")) {
       contentType = "text/plain";
     }
@@ -748,6 +754,7 @@ router.get('/user-files/:fileId', authenticateToken, async (req, res) => {
     const fileSize = stat.size;
     const chunkSize = 65_536;
 
+    // Set headers for partial content, and pipe read stream to the response
     if (range) {
       const parts = range.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);

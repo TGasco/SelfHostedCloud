@@ -5,3 +5,4 @@ server/server.key
 server/server.cert
 server/server.csr
 unused_fragments.js
+.history

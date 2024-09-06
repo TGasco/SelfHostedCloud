@@ -2,14 +2,17 @@
 
 This is a self-hosted cloud service built using Node.js, Express, and various other libraries. It provides a secure platform to store and manage files with an easy-to-use web interface.
 
+The service supports uploading, downloading, and managing files and folders. It also includes search functionality and file preview for common file types.
+
 ## Features
 
 - Secure connection with HTTPS
-- Support for uploading, downloading, and managing files
+- Support for uploading, downloading, and managing files (drag and drop or file picker interface)
+- Search functionality for files and folders
+- File preview for common file types (images, text-based, PDFs)
+- Secure User authentication with rotating JWT tokens
 - CORS configuration for cross-origin requests
-- Content Security Policy with Helmet
 - Compression middleware for faster transfer speeds
-- Cookie parser for handling cookies
 
 ## Prerequisites
 
@@ -23,7 +26,7 @@ Before you begin, make sure you have the following software installed on your ma
 1. Clone the repository:
 
    ```
-   git clone https://github.com/yourusername/my-self-hosted-cloud-service.git
+   git clone https://github.com/TGasco/SelfHostedCloud.git
    ```
 
 2. Change directory to the project root:
@@ -65,12 +68,16 @@ You can customize the following configurations in the `server.js` file:
 
 Visit `https://localhost:8081` in your browser to access the web interface. You can upload, download, and manage your files through this interface.
 
-Files are stored on the host device, at a specified location (default '~/MyCloudDrive'). This can be changed to a locations of your choice when creating an account.
+Files are stored on the host device, at a specified location (default '~/MyCloudDrive'). This can be changed to a location of your choice when creating an account.
+
+Files can be uploaded using the web interface via drag and drop or using the file picker. You can also search for files and folders using the search bar.
+
+File management options are accessible by right-clicking on a file or folder (Long press on touch-based devices). You can rename, delete, or download files and folders using these options.
 
 ## Contributing
 
-Feel free to open issues and submit pull requests to improve the project.
+Feel free to open issues and submit pull requests to help improve the project.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

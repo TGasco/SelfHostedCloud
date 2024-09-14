@@ -57,6 +57,11 @@ Before you begin, make sure you have the following software installed on your ma
 
    The server will be running at `https://localhost:8081`.
 
+## [Optional] One-Command Installation (Experimental!)
+
+
+
+
 ## Configuration
 
 You can customize the following configurations in the `server.js` file:
@@ -80,4 +85,4 @@ Feel free to open issues and submit pull requests to help improve the project.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
